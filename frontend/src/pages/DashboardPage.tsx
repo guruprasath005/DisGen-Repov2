@@ -376,7 +376,7 @@ export default function DashboardPage() {
               Upload
             </Link>
           </Button>
-          {canViewStats ? (
+          {(user?.role === "admin" || user?.role === "super_admin") ? (
             <>
               <Button asChild variant="outline" size="sm" className={quickLinkClass}>
                 <Link to="/admin/analytics">
