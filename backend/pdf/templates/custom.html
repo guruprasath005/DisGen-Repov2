@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{# Custom-scheme template — renders all required and optional fields declared
+   in Scheme.required_fields / Scheme.optional_fields as a labeled field table.
+   Reads from summary_fields (sf) first, falls back to structured_data.        #}
+
+{% block scheme_panel %}{% endblock %}
+
+{% block scheme_fields_table %}
+{% if required_field_defs or optional_field_defs %}
+<div class="fields-section">
+  <h2>{{ scheme.label }}</h2>
+  <table class="field-table">
+    {% for field_name, field_label in required_field_defs %}
+      {% set display_val = sf.get(field_name) or structured_data.get(field_name) %}
+      {% set dv = display_val | field_display %}
+      <tr>
+        <td class="field-label">{{ field_label }}</td>
+        <td class="field-value {% if not dv %}field-empty{% endif %}">
+          {% if dv %}{{ dv }}{% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    {% for field_name, field_label in optional_field_defs %}
+      {% set display_val = sf.get(field_name) or structured_data.get(field_name) %}
+      {% set dv = display_val | field_display %}
+      <tr class="field-optional">
+        <td class="field-label">{{ field_label }}</td>
+        <td class="field-value {% if not dv %}field-empty{% endif %}">
+          {% if dv %}{{ dv }}{% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

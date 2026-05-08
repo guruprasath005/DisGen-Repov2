@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{# Private: Required = policy_number, tpa_name, preauth_reference_number
+   Optional = member_id, room_category_eligible, room_category_occupied,
+              sum_insured, preauth_approved_amount, copay_percentage
+#}
+{% block scheme_panel %}
+<section class="panel">
+  <h2>Insurance Coverage</h2>
+  <dl class="kv-grid">
+    <dt>Policy No.</dt>
+    <dd>{{ (sf.get('policy_number') or structured_data.get('policy_number')) or 'Not documented' }}</dd>
+
+    <dt>TPA / Insurer</dt>
+    <dd>{{ (sf.get('tpa_name') or structured_data.get('tpa_name')) or 'Not documented' }}</dd>
+
+    <dt>Pre-Auth Ref.</dt>
+    <dd>{{ (sf.get('preauth_reference_number') or structured_data.get('preauth_reference_number')) or 'Not documented' }}</dd>
+
+    <dt>Member ID</dt>
+    <dd>{{ (sf.get('member_id') or structured_data.get('member_id')) or '—' }}</dd>
+
+    <dt>Room Eligible</dt>
+    <dd>{{ (sf.get('room_category_eligible') or structured_data.get('room_category_eligible')) or '—' }}</dd>
+
+    <dt>Room Occupied</dt>
+    <dd>{{ (sf.get('room_category_occupied') or structured_data.get('room_category_occupied')) or '—' }}</dd>
+
+    {% set sum_ins = sf.get('sum_insured') or structured_data.get('sum_insured') %}
+    {% if sum_ins %}
+    <dt>Sum Insured</dt>
+    <dd>&#8377; {{ sum_ins }}</dd>
+    {% endif %}
+
+    {% set approved = sf.get('preauth_approved_amount') or structured_data.get('preauth_approved_amount') %}
+    {% if approved %}
+    <dt>Approved</dt>
+    <dd>&#8377; {{ approved }}</dd>
+    {% endif %}
+
+    {% set copay = sf.get('copay_percentage') or structured_data.get('copay_percentage') %}
+    {% if copay %}
+    <dt>Co-pay</dt>
+    <dd>{{ copay }}%</dd>
+    {% endif %}
+  </dl>
+</section>
+{% endblock %}

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Discharge Summary — {{ structured_data.patient_name or document.filename }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 1.6cm 1.4cm 2.2cm 1.4cm;
+    @bottom-left {
+      content: "Doc ID: {{ document.id }}";
+      font-size: 7.5pt;
+      color: #6b7280;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 7.5pt;
+      color: #6b7280;
+    }
+  }
+
+  /* ── Base typography ───────────────────────────────────────────────── */
+  body {
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    font-size: 10pt;
+    color: #1f2937;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ── Hospital header ───────────────────────────────────────────────── */
+  .header {
+    border-bottom: 3px solid {{ hospital_config.pdf_header_color or '#F97316' }};
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .hospital h1 {
+    margin: 0;
+    font-size: 16pt;
+    color: {{ hospital_config.pdf_header_color or '#F97316' }};
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .hospital .meta {
+    margin: 3px 0 0;
+    font-size: 8.5pt;
+    color: #6b7280;
+  }
+  .scheme-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: {{ scheme.color or '#1A56DB' }};
+    color: white;
+    font-size: 8.5pt;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .doc-title {
+    text-align: center;
+    font-size: 13pt;
+    font-weight: 600;
+    color: #111827;
+    margin: 4px 0 14px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ── Info panels ──────────────────────────────────────────────────── */
+  .panel {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-left: 3px solid {{ hospital_config.pdf_accent_color or '#EA580C' }};
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+  }
+  .panel h2 {
+    margin: 0 0 8px;
+    font-size: 10.5pt;
+    color: {{ hospital_config.pdf_accent_color or '#EA580C' }};
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+  }
+  .kv-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr max-content 1fr;
+    gap: 4px 12px;
+    font-size: 9.5pt;
+    margin: 0;
+  }
+  .kv-grid dt {
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .kv-grid dd {
+    margin: 0;
+    color: #111827;
+  }
+
+  /* ── Field-based clinical summary ────────────────────────────────── */
+  .fields-section {
+    margin-top: 4px;
+  }
+  .fields-section > h2 {
+    color: {{ hospital_config.pdf_header_color or '#F97316' }};
+    font-size: 11.5pt;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 3px;
+    margin: 14px 0 6px;
+    page-break-after: avoid;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+  .field-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 4px;
+    font-size: 9.5pt;
+  }
+  .field-table tr {
+    page-break-inside: avoid;
+  }
+  .field-table tr:nth-child(even) {
+    background: #f9fafb;
+  }
+  .field-label {
+    width: 32%;
+    padding: 6px 10px 6px 0;
+    color: #374151;
+    font-weight: 600;
+    vertical-align: top;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .field-value {
+    padding: 6px 0 6px 8px;
+    color: #111827;
+    vertical-align: top;
+    border-bottom: 1px solid #f3f4f6;
+    word-break: break-word;
+  }
+  .field-empty {
+    color: #9ca3af;
+  }
+  .field-optional .field-label {
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  /* ── Legacy: Markdown → HTML summary content ─────────────────────── */
+  .summary-content h2 {
+    color: {{ hospital_config.pdf_header_color or '#F97316' }};
+    font-size: 11.5pt;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 3px;
+    margin: 14px 0 8px;
+    page-break-after: avoid;
+  }
+  .summary-content h3 {
+    font-size: 10.5pt;
+    color: #374151;
+    margin: 10px 0 6px;
+  }
+  .summary-content p {
+    margin: 6px 0;
+  }
+  .summary-content ul,
+  .summary-content ol {
+    margin: 6px 0 6px 18px;
+    padding: 0;
+  }
+  .summary-content li {
+    margin: 2px 0;
+  }
+  .summary-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 9.5pt;
+  }
+  .summary-content th,
+  .summary-content td {
+    border: 1px solid #e5e7eb;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .summary-content th {
+    background: #f3f4f6;
+    font-weight: 600;
+  }
+  .summary-content strong {
+    color: #111827;
+  }
+
+  /* ── Audit footer ─────────────────────────────────────────────────── */
+  .audit {
+    margin-top: 24px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 7.5pt;
+    color: #6b7280;
+    line-height: 1.5;
+  }
+  .audit strong {
+    color: #374151;
+  }
+
+  /* ── Draft watermark ──────────────────────────────────────────────── */
+  {% if is_draft %}
+  body::before {
+    content: "DRAFT";
+    position: fixed;
+    top: 38%;
+    left: 25%;
+    font-size: 130pt;
+    font-weight: 900;
+    color: rgba(245, 158, 11, 0.10);
+    transform: rotate(-30deg);
+    letter-spacing: 0.05em;
+    z-index: 0;
+    pointer-events: none;
+  }
+  {% endif %}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="hospital">
+    <h1>{{ hospital_config.name }}</h1>
+    {% if hospital_config.address %}
+    <p class="meta">{{ hospital_config.address }}</p>
+    {% endif %}
+    <p class="meta">
+      {% if hospital_config.phone %}Tel: {{ hospital_config.phone }}{% endif %}
+      {% if hospital_config.email %} · {{ hospital_config.email }}{% endif %}
+      {% if hospital_config.registration_number %} · Reg: {{ hospital_config.registration_number }}{% endif %}
+    </p>
+  </div>
+  <div>
+    <span class="scheme-badge">{{ scheme.name }}</span>
+  </div>
+</header>
+
+<div class="doc-title">Discharge Summary</div>
+
+{# ── Patient demographics panel (always from structured OCR data) ─────────── #}
+<section class="panel">
+  <h2>Patient</h2>
+  <dl class="kv-grid">
+    <dt>Name</dt><dd>{{ structured_data.patient_name or 'Not documented' }}</dd>
+    <dt>UHID</dt><dd>{{ structured_data.uhid or 'Not documented' }}</dd>
+    <dt>Age</dt><dd>{{ structured_data.age or 'Not documented' }}</dd>
+    <dt>Gender</dt><dd>{{ structured_data.gender or 'Not documented' }}</dd>
+    <dt>ABHA</dt><dd>{{ structured_data.abha_id or 'Not documented' }}</dd>
+    <dt>Phone</dt><dd>{{ structured_data.phone or 'Not documented' }}</dd>
+    <dt>Admission</dt><dd>{{ structured_data.admission_date or 'Not documented' }}</dd>
+    <dt>Discharge</dt><dd>{{ structured_data.discharge_date or 'Not documented' }}</dd>
+    <dt>Ward</dt><dd>{{ structured_data.ward or 'Not documented' }}</dd>
+    <dt>Bed</dt><dd>{{ structured_data.bed_number or 'Not documented' }}</dd>
+  </dl>
+</section>
+
+{# ── Clinical narrative panels (always from confirmed structured data) ─────── #}
+
+{% set pd = structured_data.get('primary_diagnosis') %}
+{% set sec_list = structured_data.get('secondary_diagnoses') or [] %}
+{% if pd or sec_list %}
+<section class="panel">
+  <h2>Diagnosis</h2>
+  <dl class="kv-grid">
+    <dt>Primary</dt>
+    <dd>
+      {% if pd is mapping %}
+        {{ pd.get('name') or pd.get('diagnosis') or '—' }}{% if pd.get('icd10_code') %} ({{ pd.get('icd10_code') }}){% endif %}
+      {% elif pd %}{{ pd }}{% else %}Not documented{% endif %}
+    </dd>
+    {% if sec_list %}
+    <dt>Secondary</dt>
+    <dd>{% for d in sec_list %}{% if d is mapping %}{{ d.get('name') or d.get('diagnosis') or '—' }}{% if d.get('icd10_code') %} ({{ d.get('icd10_code') }}){% endif %}{% else %}{{ d }}{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</dd>
+    {% endif %}
+    {% if structured_data.get('presenting_complaints') %}
+    <dt>Complaints</dt>
+    <dd>{{ structured_data.presenting_complaints | join(', ') if structured_data.presenting_complaints is iterable and structured_data.presenting_complaints is not string else structured_data.presenting_complaints }}</dd>
+    {% endif %}
+  </dl>
+</section>
+{% endif %}
+
+{% set dc_meds = structured_data.get('discharge_medications') or [] %}
+{% set stay_meds = structured_data.get('medications_during_stay') or [] %}
+{% if stay_meds or dc_meds %}
+<section class="panel">
+  <h2>Medications</h2>
+  {% if stay_meds %}
+  <p style="font-size:9pt;font-weight:600;margin:0 0 4px;color:#374151;">During stay</p>
+  <table class="field-table" style="margin-bottom:8px;">
+    {% for m in stay_meds %}
+    <tr><td class="field-label">{{ m.get('name') or m.get('drug') or m }}</td><td class="field-value">{{ m.get('dose') or '' }}{% if m.get('route') %} · {{ m.get('route') }}{% endif %}{% if m.get('frequency') %} · {{ m.get('frequency') }}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  {% if dc_meds %}
+  <p style="font-size:9pt;font-weight:600;margin:0 0 4px;color:#374151;">At discharge</p>
+  <table class="field-table">
+    {% for m in dc_meds %}
+    <tr><td class="field-label">{{ m.get('name') or m.get('drug') or m }}</td><td class="field-value">{{ m.get('dose') or '' }}{% if m.get('route') %} · {{ m.get('route') }}{% endif %}{% if m.get('frequency') %} · {{ m.get('frequency') }}{% endif %}{% if m.get('duration') %} · {{ m.get('duration') }}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</section>
+{% endif %}
+
+{% set procs = structured_data.get('procedures') or [] %}
+{% if procs %}
+<section class="panel">
+  <h2>Procedures</h2>
+  <table class="field-table">
+    {% for p in procs %}
+    <tr><td class="field-label">{{ p.get('name') or p.get('procedure') or p }}</td><td class="field-value">{{ p.get('date') or '' }}{% if p.get('surgeon') %} · {{ p.get('surgeon') }}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+
+{% if structured_data.get('follow_up_instructions') or structured_data.get('follow_up_date') %}
+<section class="panel">
+  <h2>Follow-up</h2>
+  <dl class="kv-grid">
+    {% if structured_data.get('follow_up_date') %}
+    <dt>Date</dt><dd>{{ structured_data.follow_up_date }}</dd>
+    {% endif %}
+    {% if structured_data.get('follow_up_instructions') %}
+    <dt>Instructions</dt><dd>{{ structured_data.follow_up_instructions }}</dd>
+    {% endif %}
+    {% if structured_data.get('diet_advice') %}
+    <dt>Diet</dt><dd>{{ structured_data.diet_advice }}</dd>
+    {% endif %}
+  </dl>
+</section>
+{% endif %}
+
+{# ── Scheme-specific coverage panel (filled by child templates) ───────────── #}
+{% block scheme_panel %}{% endblock %}
+
+{# ── Scheme-specific field table (custom schemes only) ────────────────────── #}
+{# Built-in scheme templates handle their own fields via scheme_panel above.   #}
+{# custom.html overrides this block with the generic labeled-row table.        #}
+{% block scheme_fields_table %}{% endblock %}
+
+{# ── Legacy free-text fallback (old summaries without summary_fields) ─────── #}
+{% if not summary_fields and summary_html %}
+<article class="summary-content">
+{{ summary_html | safe }}
+</article>
+{% endif %}
+
+<footer class="audit">
+  Generated by <strong>{{ generated_by_name }}</strong> on {{ generated_at }}
+  · Version <strong>{{ summary.version }}</strong>
+  · Status <strong>{{ summary.status | upper }}</strong>
+  {% if summary.status == 'approved' and approved_by_name %}
+  · Approved by <strong>{{ approved_by_name }}</strong> on {{ approved_at }}
+  {% endif %}
+  <br>
+  Document ID: {{ document.id }}
+  · SHA-256: {{ document.sha256_hash[:16] }}…
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{# CGHS: Required = cghs_card_number, employee_id, ward_entitlement
+   Optional = referral_letter_number, cghs_empanelment_number, treating_specialty
+   sf  = summary_fields dict (always a plain dict, safe to .get())
+   structured_data = raw OCR data (fallback for old summaries without sf)
+#}
+{% block scheme_panel %}
+<section class="panel">
+  <h2>CGHS Coverage</h2>
+  <dl class="kv-grid">
+    <dt>Card Number</dt>
+    <dd>{{ (sf.get('cghs_card_number') or structured_data.get('cghs_card_number')) or 'Not documented' }}</dd>
+
+    <dt>Employee ID</dt>
+    <dd>{{ (sf.get('employee_id') or structured_data.get('employee_id')) or 'Not documented' }}</dd>
+
+    <dt>Ward Entitlement</dt>
+    <dd>{{ (sf.get('ward_entitlement') or structured_data.get('ward_entitlement')) or 'Not documented' }}</dd>
+
+    <dt>Specialty</dt>
+    <dd>{{ (sf.get('treating_specialty') or structured_data.get('treating_specialty')) or '—' }}</dd>
+
+    <dt>Referral Letter</dt>
+    <dd>{{ (sf.get('referral_letter_number') or structured_data.get('referral_letter_number')) or '—' }}</dd>
+
+    <dt>Empanelment No.</dt>
+    <dd>{{ (sf.get('cghs_empanelment_number') or structured_data.get('cghs_empanelment_number')) or '—' }}</dd>
+  </dl>
+</section>
+{% endblock %}

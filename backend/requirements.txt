@@ -1,0 +1,68 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+
+# Config
+pydantic-settings==2.6.1
+pydantic[email]==2.10.3
+python-dotenv==1.0.1
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Auth
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.1
+passlib[bcrypt]==1.7.4
+
+# Redis
+redis==5.2.1
+
+# Celery
+celery[redis]==5.4.0
+
+# HTTP client
+httpx==0.28.1
+
+# Metrics
+prometheus-client==0.21.1
+
+# File handling
+python-magic==0.4.27
+
+# Encryption
+cryptography==44.0.0
+
+# Azure Document Intelligence (OCR — Central India, Pune)
+azure-ai-documentintelligence==1.0.0
+
+# OpenAI (LLM — development use)
+openai==1.78.1
+
+# OCR fallback
+spacy==3.8.2
+
+# PDF
+jinja2==3.1.4
+weasyprint==62.3
+# pydyf 0.11+ has a breaking API change (.transform removed) that crashes
+# WeasyPrint 62.x — pin to the last compatible release. Upgrade together.
+pydyf==0.10.0
+markdown==3.7
+
+# ChromaDB
+# Pinned to match chromadb server tag in docker-compose.yml — keep in sync.
+chromadb==1.0.16
+
+# MinIO
+minio==7.2.11
+
+# Error tracking
+sentry-sdk[fastapi]==2.19.2
+
+# Misc
+python-dateutil==2.9.0
+json-repair>=0.30.0

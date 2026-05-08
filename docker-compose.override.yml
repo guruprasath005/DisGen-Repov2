@@ -1,0 +1,19 @@
+# Development only — bind-mounts local code so changes reload without rebuilding.
+# NEVER copy this file to production.
+
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - ./backend/auth/keys:/app/auth/keys:ro
+    environment:
+      RELOAD: "true"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    volumes:
+      - ./backend:/app
+
+  celery_beat:
+    volumes:
+      - ./backend:/app

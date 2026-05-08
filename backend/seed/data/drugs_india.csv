@@ -1,0 +1,691 @@
+brand_name,generic_name
+Augmentin,Amoxicillin + Clavulanate Potassium
+Amoxil,Amoxicillin
+Ciproflox,Ciprofloxacin
+Ciplox,Ciprofloxacin
+Cifran,Ciprofloxacin
+Taxim,Cefotaxime
+Monocef,Ceftriaxone
+Rocephin,Ceftriaxone
+Ceftum,Cefuroxime Axetil
+Cefolac,Cefpodoxime Proxetil
+Keflex,Cefalexin
+Sporidex,Cefalexin
+Norflox,Norfloxacin
+Zenflox,Ofloxacin
+Zanocin,Ofloxacin
+Levoflox,Levofloxacin
+Levoquin,Levofloxacin
+Moxiflox,Moxifloxacin
+Avelox,Moxifloxacin
+Azithral,Azithromycin
+Zithromax,Azithromycin
+Althrocin,Erythromycin
+Erythrocin,Erythromycin
+Doxycycline,Doxycycline Hyclate
+Vibramycin,Doxycycline Hyclate
+Minocycline,Minocycline Hydrochloride
+Clindamycin,Clindamycin Hydrochloride
+Dalacin,Clindamycin Hydrochloride
+Vancocin,Vancomycin Hydrochloride
+Tazact,Piperacillin + Tazobactam
+Zosyn,Piperacillin + Tazobactam
+Meronem,Meropenem
+Merrem,Meropenem
+Imipenem,Imipenem + Cilastatin
+Fortaz,Ceftazidime
+Cefizox,Ceftizoxime
+Linezolid,Linezolid
+Zyvox,Linezolid
+Metronidazole,Metronidazole
+Flagyl,Metronidazole
+Tinidazole,Tinidazole
+Fasigyn,Tinidazole
+Fluconazole,Fluconazole
+Forcan,Fluconazole
+Diflucan,Fluconazole
+Itraconazole,Itraconazole
+Sporanox,Itraconazole
+Voriconazole,Voriconazole
+Vfend,Voriconazole
+Amphotericin B,Amphotericin B
+Fungilin,Amphotericin B
+Acyclovir,Aciclovir
+Zovirax,Aciclovir
+Valacyclovir,Valaciclovir
+Valtrex,Valaciclovir
+Oseltamivir,Oseltamivir Phosphate
+Tamiflu,Oseltamivir Phosphate
+Ivermectin,Ivermectin
+Albendazole,Albendazole
+Zentel,Albendazole
+Mebendazole,Mebendazole
+Vermox,Mebendazole
+Chloroquine,Chloroquine Phosphate
+Resochin,Chloroquine Phosphate
+Primaquine,Primaquine Phosphate
+Artemether,Artemether
+Artesunate,Artesunate
+Coartem,Artemether + Lumefantrine
+Doxinate,Doxylamine + Pyridoxine
+Metakelfin,Sulfadoxine + Pyrimethamine
+Paracetamol,Paracetamol (Acetaminophen)
+Crocin,Paracetamol (Acetaminophen)
+Dolo,Paracetamol (Acetaminophen)
+Calpol,Paracetamol (Acetaminophen)
+Sumo,Nimesulide + Paracetamol
+Combiflam,Ibuprofen + Paracetamol
+Ibuprofen,Ibuprofen
+Brufen,Ibuprofen
+Diclofenac,Diclofenac Sodium
+Voveran,Diclofenac Sodium
+Voltaren,Diclofenac Sodium
+Nimesulide,Nimesulide
+Nimegesic,Nimesulide
+Meftal,Mefenamic Acid
+Ponstan,Mefenamic Acid
+Piroxicam,Piroxicam
+Feldene,Piroxicam
+Naproxen,Naproxen Sodium
+Naprosyn,Naproxen Sodium
+Ketorolac,Ketorolac Tromethamine
+Toradol,Ketorolac Tromethamine
+Indomethacin,Indometacin
+Indocid,Indometacin
+Etoricoxib,Etoricoxib
+Arcoxia,Etoricoxib
+Celecoxib,Celecoxib
+Celebrex,Celecoxib
+Tramadol,Tramadol Hydrochloride
+Tramazac,Tramadol Hydrochloride
+Ultram,Tramadol Hydrochloride
+Morphine,Morphine Sulfate
+MS Contin,Morphine Sulfate
+Fentanyl,Fentanyl Citrate
+Durogesic,Fentanyl Citrate
+Buprenorphine,Buprenorphine Hydrochloride
+Temgesic,Buprenorphine Hydrochloride
+Pentazocine,Pentazocine
+Fortwin,Pentazocine
+Aspirin,Acetylsalicylic Acid
+Ecosprin,Acetylsalicylic Acid
+Disprin,Acetylsalicylic Acid
+Atorvastatin,Atorvastatin Calcium
+Lipitor,Atorvastatin Calcium
+Atorlip,Atorvastatin Calcium
+Rosuvastatin,Rosuvastatin Calcium
+Crestor,Rosuvastatin Calcium
+Rozucor,Rosuvastatin Calcium
+Simvastatin,Simvastatin
+Zocor,Simvastatin
+Pravastatin,Pravastatin Sodium
+Pravachol,Pravastatin Sodium
+Fenofibrate,Fenofibrate
+Tricor,Fenofibrate
+Gemfibrozil,Gemfibrozil
+Lopid,Gemfibrozil
+Ezetimibe,Ezetimibe
+Ezetrol,Ezetimibe
+Amlodipine,Amlodipine Besylate
+Amlong,Amlodipine Besylate
+Norvasc,Amlodipine Besylate
+Nifedipine,Nifedipine
+Adalat,Nifedipine
+Felodipine,Felodipine
+Plendil,Felodipine
+Diltiazem,Diltiazem Hydrochloride
+Dilzem,Diltiazem Hydrochloride
+Verapamil,Verapamil Hydrochloride
+Isoptin,Verapamil Hydrochloride
+Metoprolol,Metoprolol Succinate
+Metolar,Metoprolol Succinate
+Lopressor,Metoprolol Tartrate
+Atenolol,Atenolol
+Aten,Atenolol
+Tenormin,Atenolol
+Bisoprolol,Bisoprolol Fumarate
+Concor,Bisoprolol Fumarate
+Carvedilol,Carvedilol
+Carloc,Carvedilol
+Coreg,Carvedilol
+Nebivolol,Nebivolol Hydrochloride
+Nebicard,Nebivolol Hydrochloride
+Propranolol,Propranolol Hydrochloride
+Inderal,Propranolol Hydrochloride
+Enalapril,Enalapril Maleate
+Envas,Enalapril Maleate
+Lisinopril,Lisinopril
+Listril,Lisinopril
+Ramipril,Ramipril
+Cardace,Ramipril
+Perindopril,Perindopril Erbumine
+Coversyl,Perindopril Erbumine
+Trandolapril,Trandolapril
+Mavik,Trandolapril
+Losartan,Losartan Potassium
+Losar,Losartan Potassium
+Cozaar,Losartan Potassium
+Olmesartan,Olmesartan Medoxomil
+Olsar,Olmesartan Medoxomil
+Valsartan,Valsartan
+Valzaar,Valsartan
+Telmisartan,Telmisartan
+Telma,Telmisartan
+Irbesartan,Irbesartan
+Avapro,Irbesartan
+Candesartan,Candesartan Cilexetil
+Atacand,Candesartan Cilexetil
+Furosemide,Furosemide
+Lasix,Furosemide
+Torsemide,Torasemide
+Dytor,Torasemide
+Hydrochlorothiazide,Hydrochlorothiazide
+Esidrex,Hydrochlorothiazide
+Spironolactone,Spironolactone
+Aldactone,Spironolactone
+Frusemide,Furosemide
+Mannitol,Mannitol
+Nitroglycerine,Glyceryl Trinitrate
+Nitrostat,Glyceryl Trinitrate
+Isosorbide Mononitrate,Isosorbide Mononitrate
+Ismo,Isosorbide Mononitrate
+Isosorbide Dinitrate,Isosorbide Dinitrate
+Sorbitrate,Isosorbide Dinitrate
+Digoxin,Digoxin
+Lanoxin,Digoxin
+Amiodarone,Amiodarone Hydrochloride
+Cordarone,Amiodarone Hydrochloride
+Sotalol,Sotalol Hydrochloride
+Betapace,Sotalol Hydrochloride
+Warfarin,Warfarin Sodium
+Warf,Warfarin Sodium
+Heparin,Heparin Sodium
+Clexane,Enoxaparin Sodium
+Enoxaparin,Enoxaparin Sodium
+Dabigatran,Dabigatran Etexilate
+Pradaxa,Dabigatran Etexilate
+Rivaroxaban,Rivaroxaban
+Xarelto,Rivaroxaban
+Apixaban,Apixaban
+Eliquis,Apixaban
+Clopidogrel,Clopidogrel Bisulfate
+Plavix,Clopidogrel Bisulfate
+Clopilet,Clopidogrel Bisulfate
+Ticagrelor,Ticagrelor
+Brilinta,Ticagrelor
+Prasugrel,Prasugrel
+Effient,Prasugrel
+Streptokinase,Streptokinase
+Alteplase,Alteplase
+Actilyse,Alteplase
+Metformin,Metformin Hydrochloride
+Glyciphage,Metformin Hydrochloride
+Glucophage,Metformin Hydrochloride
+Glibenclamide,Glibenclamide
+Daonil,Glibenclamide
+Glipizide,Glipizide
+Glucotrol,Glipizide
+Glimepiride,Glimepiride
+Amaryl,Glimepiride
+Glimy,Glimepiride
+Gliclazide,Gliclazide
+Diamicron,Gliclazide
+Pioglitazone,Pioglitazone Hydrochloride
+Actos,Pioglitazone Hydrochloride
+Sitagliptin,Sitagliptin Phosphate
+Januvia,Sitagliptin Phosphate
+Vildagliptin,Vildagliptin
+Galvus,Vildagliptin
+Saxagliptin,Saxagliptin
+Onglyza,Saxagliptin
+Linagliptin,Linagliptin
+Trajenta,Linagliptin
+Dapagliflozin,Dapagliflozin
+Forxiga,Dapagliflozin
+Empagliflozin,Empagliflozin
+Jardiance,Empagliflozin
+Canagliflozin,Canagliflozin
+Invokana,Canagliflozin
+Liraglutide,Liraglutide
+Victoza,Liraglutide
+Semaglutide,Semaglutide
+Ozempic,Semaglutide
+Exenatide,Exenatide
+Byetta,Exenatide
+Regular Insulin,Regular Human Insulin
+Actrapid,Regular Human Insulin
+Humulin R,Regular Human Insulin
+NPH Insulin,Isophane Insulin (NPH)
+Insulatard,Isophane Insulin (NPH)
+Humulin N,Isophane Insulin (NPH)
+Insulin Glargine,Insulin Glargine
+Lantus,Insulin Glargine
+Basaglar,Insulin Glargine
+Insulin Detemir,Insulin Detemir
+Levemir,Insulin Detemir
+Insulin Lispro,Insulin Lispro
+Humalog,Insulin Lispro
+Insulin Aspart,Insulin Aspart
+NovoRapid,Insulin Aspart
+Insulin Glulisine,Insulin Glulisine
+Apidra,Insulin Glulisine
+Mixtard,Biphasic Isophane Insulin 30/70
+Novomix,Insulin Aspart + Isophane Insulin
+Humalog Mix,Insulin Lispro + Insulin Lispro Protamine
+Omeprazole,Omeprazole
+Prilosec,Omeprazole
+Omez,Omeprazole
+Pantoprazole,Pantoprazole Sodium
+Pantocid,Pantoprazole Sodium
+Pan,Pantoprazole Sodium
+Rabeprazole,Rabeprazole Sodium
+Razo,Rabeprazole Sodium
+Esomeprazole,Esomeprazole Magnesium
+Nexium,Esomeprazole Magnesium
+Lansoprazole,Lansoprazole
+Prevacid,Lansoprazole
+Ranitidine,Ranitidine Hydrochloride
+Zinetac,Ranitidine Hydrochloride
+Rantac,Ranitidine Hydrochloride
+Famotidine,Famotidine
+Topcid,Famotidine
+Ondansetron,Ondansetron Hydrochloride
+Zofran,Ondansetron Hydrochloride
+Emeset,Ondansetron Hydrochloride
+Metoclopramide,Metoclopramide Hydrochloride
+Perinorm,Metoclopramide Hydrochloride
+Reglan,Metoclopramide Hydrochloride
+Domperidone,Domperidone
+Motilium,Domperidone
+Domperi,Domperidone
+Promethazine,Promethazine Hydrochloride
+Phenergan,Promethazine Hydrochloride
+Granisetron,Granisetron Hydrochloride
+Kytril,Granisetron Hydrochloride
+Sucralfate,Sucralfate
+Sucral,Sucralfate
+Antacid,Magnesium Hydroxide + Aluminium Hydroxide
+Digene,Magnesium Hydroxide + Aluminium Hydroxide + Simethicone
+Gelusil,Aluminium Hydroxide + Magnesium Trisilicate
+Lactulose,Lactulose
+Duphalac,Lactulose
+Bisacodyl,Bisacodyl
+Dulcolax,Bisacodyl
+Loperamide,Loperamide Hydrochloride
+Imodium,Loperamide Hydrochloride
+Salazopyrin,Sulfasalazine
+Mesalamine,Mesalazine
+Asacol,Mesalazine
+Budesonide,Budesonide
+Entocort,Budesonide
+Deflazacort,Deflazacort
+Decortil,Deflazacort
+Prednisolone,Prednisolone
+Wysolone,Prednisolone
+Dexamethasone,Dexamethasone
+Decadron,Dexamethasone
+Hydrocortisone,Hydrocortisone
+Solu-Cortef,Hydrocortisone Sodium Succinate
+Methylprednisolone,Methylprednisolone
+Solu-Medrol,Methylprednisolone Sodium Succinate
+Triamcinolone,Triamcinolone Acetonide
+Kenacort,Triamcinolone Acetonide
+Betamethasone,Betamethasone
+Betnesol,Betamethasone Sodium Phosphate
+Fludrocortisone,Fludrocortisone Acetate
+Florinef,Fludrocortisone Acetate
+Thyroxine,Levothyroxine Sodium
+Eltroxin,Levothyroxine Sodium
+Thyronorm,Levothyroxine Sodium
+Propylthiouracil,Propylthiouracil
+Neomercazole,Carbimazole
+Carbimazole,Carbimazole
+Methimazole,Thiamazole
+Insulin Degludec,Insulin Degludec
+Tresiba,Insulin Degludec
+Phenytoin,Phenytoin Sodium
+Dilantin,Phenytoin Sodium
+Eptoin,Phenytoin Sodium
+Carbamazepine,Carbamazepine
+Tegretol,Carbamazepine
+Valproic Acid,Sodium Valproate
+Valparin,Sodium Valproate
+Depakote,Valproate Semisodium
+Lamotrigine,Lamotrigine
+Lamictal,Lamotrigine
+Levetiracetam,Levetiracetam
+Keppra,Levetiracetam
+Oxcarbazepine,Oxcarbazepine
+Oxetol,Oxcarbazepine
+Topiramate,Topiramate
+Topamax,Topiramate
+Clonazepam,Clonazepam
+Rivotril,Clonazepam
+Diazepam,Diazepam
+Valium,Diazepam
+Lorazepam,Lorazepam
+Ativan,Lorazepam
+Alprazolam,Alprazolam
+Alprax,Alprazolam
+Xanax,Alprazolam
+Midazolam,Midazolam
+Versed,Midazolam
+Phenobarbitone,Phenobarbital
+Gardenal,Phenobarbital
+Gabapentin,Gabapentin
+Gabantin,Gabapentin
+Pregabalin,Pregabalin
+Lyrica,Pregabalin
+Zolpidem,Zolpidem Tartrate
+Ambien,Zolpidem Tartrate
+Nitrazepam,Nitrazepam
+Mogadon,Nitrazepam
+Amitriptyline,Amitriptyline Hydrochloride
+Tryptomer,Amitriptyline Hydrochloride
+Imipramine,Imipramine Hydrochloride
+Tofranil,Imipramine Hydrochloride
+Fluoxetine,Fluoxetine Hydrochloride
+Fludac,Fluoxetine Hydrochloride
+Prozac,Fluoxetine Hydrochloride
+Sertraline,Sertraline Hydrochloride
+Serta,Sertraline Hydrochloride
+Zoloft,Sertraline Hydrochloride
+Paroxetine,Paroxetine Hydrochloride
+Paxil,Paroxetine Hydrochloride
+Escitalopram,Escitalopram Oxalate
+Nexito,Escitalopram Oxalate
+Cipralex,Escitalopram Oxalate
+Citalopram,Citalopram Hydrobromide
+Citadep,Citalopram Hydrobromide
+Venlafaxine,Venlafaxine Hydrochloride
+Effexor,Venlafaxine Hydrochloride
+Duloxetine,Duloxetine Hydrochloride
+Cymbalta,Duloxetine Hydrochloride
+Mirtazapine,Mirtazapine
+Miртаzap,Mirtazapine
+Bupropion,Bupropion Hydrochloride
+Wellbutrin,Bupropion Hydrochloride
+Haloperidol,Haloperidol
+Serenace,Haloperidol
+Risperidone,Risperidone
+Risperdal,Risperidone
+Olanzapine,Olanzapine
+Oleanz,Olanzapine
+Zyprexa,Olanzapine
+Quetiapine,Quetiapine Fumarate
+Seroquel,Quetiapine Fumarate
+Clozapine,Clozapine
+Clofranil,Clomipramine Hydrochloride
+Lithium Carbonate,Lithium Carbonate
+Licab,Lithium Carbonate
+Salbutamol,Salbutamol Sulfate
+Ventolin,Salbutamol Sulfate
+Asthalin,Salbutamol Sulfate
+Terbutaline,Terbutaline Sulfate
+Bricaryl,Terbutaline Sulfate
+Formoterol,Formoterol Fumarate
+Foratec,Formoterol Fumarate
+Salmeterol,Salmeterol Xinafoate
+Serevent,Salmeterol Xinafoate
+Ipratropium,Ipratropium Bromide
+Atrovent,Ipratropium Bromide
+Tiotropium,Tiotropium Bromide
+Spiriva,Tiotropium Bromide
+Budesonide Inhaler,Budesonide
+Pulmicort,Budesonide
+Fluticasone,Fluticasone Propionate
+Flixotide,Fluticasone Propionate
+Beclometasone,Beclometasone Dipropionate
+Beclate,Beclometasone Dipropionate
+Symbicort,Budesonide + Formoterol
+Seretide,Fluticasone + Salmeterol
+Combivent,Salbutamol + Ipratropium Bromide
+Theo-Asthalin,Theophylline + Salbutamol
+Theophylline,Theophylline
+Deriphyllin,Theophylline + Etofylline
+Montelukast,Montelukast Sodium
+Singulair,Montelukast Sodium
+Montair,Montelukast Sodium
+Acetylcysteine,Acetylcysteine
+Mucomix,Acetylcysteine
+Bromhexine,Bromhexine Hydrochloride
+Broplex,Bromhexine Hydrochloride
+Ambroxol,Ambroxol Hydrochloride
+Ambrodil,Ambroxol Hydrochloride
+Chlorpheniramine,Chlorpheniramine Maleate
+Piriton,Chlorpheniramine Maleate
+Cetirizine,Cetirizine Hydrochloride
+Zyrtec,Cetirizine Hydrochloride
+Cetzine,Cetirizine Hydrochloride
+Levocetirizine,Levocetirizine Dihydrochloride
+Levocet,Levocetirizine Dihydrochloride
+Xyzal,Levocetirizine Dihydrochloride
+Fexofenadine,Fexofenadine Hydrochloride
+Allegra,Fexofenadine Hydrochloride
+Loratadine,Loratadine
+Clarityne,Loratadine
+Desloratadine,Desloratadine
+Clarinex,Desloratadine
+Dextromethorphan,Dextromethorphan Hydrobromide
+Benadryl,Diphenhydramine + Dextromethorphan
+Diphenhydramine,Diphenhydramine Hydrochloride
+Phensedyl,Codeine + Chlorpheniramine + Ephedrine
+Predfoam,Prednisolone Sodium Phosphate
+Calcium Carbonate,Calcium Carbonate
+Shelcal,Calcium Carbonate + Vitamin D3
+Calcitriol,Calcitriol
+Rocaltrol,Calcitriol
+Cholecalciferol,Cholecalciferol (Vitamin D3)
+D-Rise,Cholecalciferol (Vitamin D3)
+Uprise D3,Cholecalciferol (Vitamin D3)
+Iron Sucrose,Iron Sucrose
+Monofer,Ferric Derisomaltose
+Ferric Carboxymaltose,Ferric Carboxymaltose
+Ferinject,Ferric Carboxymaltose
+Folic Acid,Folic Acid
+Methylcobalamin,Methylcobalamin (Vitamin B12)
+Mecobalamin,Methylcobalamin (Vitamin B12)
+Cyanocobalamin,Cyanocobalamin (Vitamin B12)
+Pyridoxine,Pyridoxine Hydrochloride (Vitamin B6)
+Thiamine,Thiamine Hydrochloride (Vitamin B1)
+Multivitamin,Multivitamin Complex
+Becosules,Vitamin B Complex + Vitamin C
+Zincovit,Multivitamin + Zinc
+Zinc Sulphate,Zinc Sulfate
+Ocid,Omeprazole + Domperidone
+Nexpro RD,Esomeprazole + Domperidone
+Nise,Nimesulide
+Zerodol,Aceclofenac
+Aceclo Plus,Aceclofenac + Paracetamol
+Hifenac,Aceclofenac
+Naprosyn,Naproxen
+Oflox,Ofloxacin
+Lortab,Hydrocodone + Paracetamol
+Cefixime,Cefixime
+Taxim-O,Cefixime
+Zifi,Cefixime
+Stugeron,Cinnarizine
+Vertin,Betahistine Dihydrochloride
+Betahistine,Betahistine Dihydrochloride
+Ondansetron ODT,Ondansetron
+Dextrose,Dextrose (Glucose)
+Normal Saline,Sodium Chloride 0.9%
+Ringer's Lactate,Lactated Ringer's Solution
+Albumin,Human Albumin
+Fresh Frozen Plasma,Fresh Frozen Plasma
+Packed Red Blood Cells,Packed Red Blood Cells (PRBC)
+Platelet Concentrate,Platelet Concentrate
+Dextran,Dextran 40
+Hydroxyl Ethyl Starch,Hydroxyethyl Starch
+Gelatin,Succinylated Gelatin
+Atropine,Atropine Sulfate
+Adrenaline,Epinephrine (Adrenaline)
+Noradrenaline,Norepinephrine (Noradrenaline)
+Dopamine,Dopamine Hydrochloride
+Dobutamine,Dobutamine Hydrochloride
+Vasopressin,Vasopressin
+Milrinone,Milrinone Lactate
+Levosimendan,Levosimendan
+Simdax,Levosimendan
+Neostigmine,Neostigmine Methylsulfate
+Pyridostigmine,Pyridostigmine Bromide
+Mestinon,Pyridostigmine Bromide
+Succinylcholine,Succinylcholine Chloride
+Rocuronium,Rocuronium Bromide
+Vecuronium,Vecuronium Bromide
+Atracurium,Atracurium Besylate
+Propofol,Propofol
+Diprivan,Propofol
+Ketamine,Ketamine Hydrochloride
+Ketalar,Ketamine Hydrochloride
+Thiopentone,Thiopental Sodium
+Isoflurane,Isoflurane
+Sevoflurane,Sevoflurane
+Desflurane,Desflurane
+Nitrous Oxide,Nitrous Oxide
+Lignocaine,Lidocaine Hydrochloride
+Xylocaine,Lidocaine Hydrochloride
+Bupivacaine,Bupivacaine Hydrochloride
+Marcaine,Bupivacaine Hydrochloride
+Ropivacaine,Ropivacaine Hydrochloride
+Naropin,Ropivacaine Hydrochloride
+Spinal Heavy,Bupivacaine Hydrochloride Heavy (Spinal)
+Oxytocin,Oxytocin
+Syntocinon,Oxytocin
+Methylergometrine,Methylergometrine Maleate
+Methergin,Methylergometrine Maleate
+Misoprostol,Misoprostol
+Cytotec,Misoprostol
+Mifepristone,Mifepristone
+Mifegest,Mifepristone
+Progesterone,Progesterone
+Gestofit,Progesterone
+Dydrogesterone,Dydrogesterone
+Duphaston,Dydrogesterone
+Norethisterone,Norethisterone
+Primolut N,Norethisterone
+Clomiphene,Clomifene Citrate
+Fertyl,Clomifene Citrate
+Gonadotropin,Human Chorionic Gonadotropin (hCG)
+Pregnyl,Human Chorionic Gonadotropin (hCG)
+Folitrope,Follicle Stimulating Hormone (FSH)
+Gonal-F,Follitropin Alfa
+Cyclophosphamide,Cyclophosphamide
+Endoxan,Cyclophosphamide
+Methotrexate,Methotrexate
+Folitrax,Methotrexate
+Doxorubicin,Doxorubicin Hydrochloride
+Adriamycin,Doxorubicin Hydrochloride
+Fluorouracil,Fluorouracil (5-FU)
+Cisplatin,Cisplatin
+Platinol,Cisplatin
+Carboplatin,Carboplatin
+Paraplatin,Carboplatin
+Paclitaxel,Paclitaxel
+Taxol,Paclitaxel
+Docetaxel,Docetaxel
+Taxotere,Docetaxel
+Gemcitabine,Gemcitabine Hydrochloride
+Gemita,Gemcitabine Hydrochloride
+Vincristine,Vincristine Sulfate
+Oncovin,Vincristine Sulfate
+Imatinib,Imatinib Mesylate
+Gleevec,Imatinib Mesylate
+Imatib,Imatinib Mesylate
+Rituximab,Rituximab
+Mabthera,Rituximab
+Bevacizumab,Bevacizumab
+Avastin,Bevacizumab
+Trastuzumab,Trastuzumab
+Herceptin,Trastuzumab
+Cetuximab,Cetuximab
+Erbitux,Cetuximab
+Pembrolizumab,Pembrolizumab
+Keytruda,Pembrolizumab
+Nivolumab,Nivolumab
+Opdivo,Nivolumab
+Erythropoietin,Erythropoietin (EPO)
+Eprex,Epoetin Alfa
+Darbepoetin,Darbepoetin Alfa
+Aranesp,Darbepoetin Alfa
+G-CSF,Filgrastim
+Neupogen,Filgrastim
+Pegfilgrastim,Pegfilgrastim
+Neulasta,Pegfilgrastim
+Hydroxychloroquine,Hydroxychloroquine Sulfate
+HCQs,Hydroxychloroquine Sulfate
+Plaquenil,Hydroxychloroquine Sulfate
+Azathioprine,Azathioprine
+Imuran,Azathioprine
+Mycophenolate,Mycophenolate Mofetil
+CellCept,Mycophenolate Mofetil
+Tacrolimus,Tacrolimus
+Prograf,Tacrolimus
+Cyclosporine,Ciclosporin
+Sandimmun,Ciclosporin
+Infliximab,Infliximab
+Remicade,Infliximab
+Adalimumab,Adalimumab
+Humira,Adalimumab
+Etanercept,Etanercept
+Enbrel,Etanercept
+Allopurinol,Allopurinol
+Zyloric,Allopurinol
+Colchicine,Colchicine
+Colchicine Tablet,Colchicine
+Dapagliflozin + Saxagliptin,Dapagliflozin + Saxagliptin
+Qtern,Dapagliflozin + Saxagliptin
+Empagliflozin + Linagliptin,Empagliflozin + Linagliptin
+Glyxambi,Empagliflozin + Linagliptin
+ORS,Oral Rehydration Salts (ORS)
+Electral,Oral Rehydration Salts (ORS)
+Zinc + ORS,Zinc Sulfate + Oral Rehydration Salts
+Cotrimoxazole,Trimethoprim + Sulfamethoxazole
+Septran,Trimethoprim + Sulfamethoxazole
+Bactrim,Trimethoprim + Sulfamethoxazole
+Rifampicin,Rifampicin
+Rifacin,Rifampicin
+Isoniazid,Isoniazid
+Pyrazinamide,Pyrazinamide
+Ethambutol,Ethambutol Hydrochloride
+Streptomycin,Streptomycin Sulfate
+Kanamycin,Kanamycin Sulfate
+Amikacin,Amikacin Sulfate
+Amikin,Amikacin Sulfate
+Gentamicin,Gentamicin Sulfate
+Netilmicin,Netilmicin Sulfate
+Tobramycin,Tobramycin
+Polymyxin B,Polymyxin B Sulfate
+Colistin,Colistin Sulfate (Polymyxin E)
+Daptomycin,Daptomycin
+Cubicin,Daptomycin
+Tigecycline,Tigecycline
+Tygacil,Tigecycline
+Ceftazidime-Avibactam,Ceftazidime + Avibactam
+Avycaz,Ceftazidime + Avibactam
+Ceftolozane-Tazobactam,Ceftolozane + Tazobactam
+Zerbaxa,Ceftolozane + Tazobactam
+Tenofovir,Tenofovir Disoproxil Fumarate
+Viread,Tenofovir Disoproxil Fumarate
+Lamivudine,Lamivudine
+Heptovir,Lamivudine
+Entecavir,Entecavir
+Baraclude,Entecavir
+Sofosbuvir,Sofosbuvir
+Sovaldi,Sofosbuvir
+Sofosbuvir + Velpatasvir,Sofosbuvir + Velpatasvir
+Epclusa,Sofosbuvir + Velpatasvir
+Efavirenz,Efavirenz
+Stocrin,Efavirenz
+Nevirapine,Nevirapine
+Nevimune,Nevirapine
+Lopinavir + Ritonavir,Lopinavir + Ritonavir
+Kaletra,Lopinavir + Ritonavir
+Atazanavir,Atazanavir Sulfate
+Reyataz,Atazanavir Sulfate
+Dolutegravir,Dolutegravir Sodium
+Tivicay,Dolutegravir Sodium
+Raltegravir,Raltegravir Potassium
+Isentress,Raltegravir Potassium
+Tenofovir + Lamivudine + Dolutegravir,Tenofovir + Lamivudine + Dolutegravir
+TLD Tablet,Tenofovir + Lamivudine + Dolutegravir

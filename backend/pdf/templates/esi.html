@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{# ESI: Required = esi_ip_number, esi_dispensary_code
+   Optional = employer_code, insurance_period, esi_form_52_reference,
+              relationship_to_insured
+#}
+{% block scheme_panel %}
+<section class="panel">
+  <h2>ESI Coverage</h2>
+  <dl class="kv-grid">
+    <dt>IP Number</dt>
+    <dd>{{ (sf.get('esi_ip_number') or structured_data.get('esi_ip_number')) or 'Not documented' }}</dd>
+
+    <dt>Dispensary Code</dt>
+    <dd>{{ (sf.get('esi_dispensary_code') or structured_data.get('esi_dispensary_code')) or 'Not documented' }}</dd>
+
+    <dt>Employer Code</dt>
+    <dd>{{ (sf.get('employer_code') or structured_data.get('employer_code')) or '—' }}</dd>
+
+    <dt>Insurance Period</dt>
+    <dd>{{ (sf.get('insurance_period') or structured_data.get('insurance_period')) or '—' }}</dd>
+
+    <dt>Relationship</dt>
+    <dd>{{ (sf.get('relationship_to_insured') or structured_data.get('relationship_to_insured')) or 'Self' }}</dd>
+
+    <dt>Form 52 Ref.</dt>
+    <dd>{{ (sf.get('esi_form_52_reference') or structured_data.get('esi_form_52_reference')) or '—' }}</dd>
+  </dl>
+</section>
+{% endblock %}

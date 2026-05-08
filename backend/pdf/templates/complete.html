@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{# Complete Clinical Discharge Summary
+   Required: history_and_examination, hospital_course, investigation_results,
+             treatment_summary, discharge_plan
+   Optional: operative_details, post_operative_course, donor_information
+#}
+
+{% block scheme_panel %}
+{# ── Vitals at admission — rendered directly from structured_data ─────────── #}
+{% set sd = structured_data %}
+{% set has_vitals = sd.get('blood_pressure') or sd.get('pulse_rate') or sd.get('respiratory_rate') or sd.get('temperature') or sd.get('oxygen_saturation') or sd.get('weight') or sd.get('height') or sd.get('blood_group') %}
+{% if has_vitals %}
+<section class="panel">
+  <h2>Vitals at Admission</h2>
+  <dl class="kv-grid">
+    {% if sd.get('blood_pressure') %}<dt>Blood Pressure</dt><dd>{{ sd.blood_pressure }}</dd>{% endif %}
+    {% if sd.get('pulse_rate') %}<dt>Pulse</dt><dd>{{ sd.pulse_rate }}</dd>{% endif %}
+    {% if sd.get('respiratory_rate') %}<dt>Resp. Rate</dt><dd>{{ sd.respiratory_rate }}</dd>{% endif %}
+    {% if sd.get('temperature') %}<dt>Temperature</dt><dd>{{ sd.temperature }}</dd>{% endif %}
+    {% if sd.get('oxygen_saturation') %}<dt>SpO₂</dt><dd>{{ sd.oxygen_saturation }}</dd>{% endif %}
+    {% if sd.get('weight') %}<dt>Weight</dt><dd>{{ sd.weight }}</dd>{% endif %}
+    {% if sd.get('height') %}<dt>Height</dt><dd>{{ sd.height }}</dd>{% endif %}
+    {% if sd.get('blood_group') %}<dt>Blood Group</dt><dd>{{ sd.blood_group }}</dd>{% endif %}
+  </dl>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scheme_fields_table %}
+<style>
+  .narrative-section .narrative-body {
+    font-size: 9.5pt;
+    line-height: 1.6;
+    color: #111827;
+    white-space: pre-wrap;
+  }
+</style>
+
+{# ── Required narrative sections ──────────────────────────────────────────── #}
+{% for field_name, field_label in required_field_defs %}
+  {% set content = sf.get(field_name) | field_display %}
+  <section class="panel narrative-section">
+    <h2>{{ field_label }}</h2>
+    <div class="narrative-body">
+      {% if content %}{{ content }}{% else %}Not documented.{% endif %}
+    </div>
+  </section>
+{% endfor %}
+
+{# ── Optional narrative sections — rendered only when populated ───────────── #}
+{% for field_name, field_label in optional_field_defs %}
+  {% set content = sf.get(field_name) | field_display %}
+  {% if content %}
+  <section class="panel narrative-section">
+    <h2>{{ field_label }}</h2>
+    <div class="narrative-body">{{ content }}</div>
+  </section>
+  {% endif %}
+{% endfor %}
+
+{# ── Treating team ────────────────────────────────────────────────────────── #}
+{% set consultant = structured_data.get('consultant') %}
+{% set surgeon = structured_data.get('surgeon') %}
+{% set anesthetist = structured_data.get('anesthetist') %}
+{% set dept = structured_data.get('department') %}
+{% if consultant or surgeon or anesthetist %}
+<section class="panel">
+  <h2>Treating Team</h2>
+  <dl class="kv-grid">
+    {% if dept %}<dt>Department</dt><dd>{{ dept }}</dd>{% endif %}
+    {% if consultant %}<dt>Consultant</dt><dd>{{ consultant }}</dd>{% endif %}
+    {% if surgeon %}<dt>Surgeon</dt><dd>{{ surgeon }}</dd>{% endif %}
+    {% if anesthetist %}<dt>Anaesthetist</dt><dd>{{ anesthetist }}</dd>{% endif %}
+  </dl>
+</section>
+{% endif %}
+
+{# ── ICD-10 codes ─────────────────────────────────────────────────────────── #}
+{% set icd_primary = structured_data.get('icd10_primary') %}
+{% set icd_secondary = structured_data.get('icd10_secondary') or [] %}
+{% if icd_primary or icd_secondary %}
+<section class="panel">
+  <h2>ICD-10 Codes</h2>
+  <table class="field-table">
+    {% if icd_primary %}
+    <tr>
+      <td class="field-label">Primary</td>
+      <td class="field-value">
+        {% if icd_primary is mapping %}
+          {{ icd_primary.get('code') or '—' }} — {{ icd_primary.get('description') or '—' }}
+        {% else %}{{ icd_primary }}{% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% for code in icd_secondary %}
+    <tr>
+      <td class="field-label">Secondary</td>
+      <td class="field-value">
+        {% if code is mapping %}
+          {{ code.get('code') or '—' }} — {{ code.get('description') or '—' }}
+        {% else %}{{ code }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+{% endblock %}

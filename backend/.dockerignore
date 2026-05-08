@@ -1,0 +1,15 @@
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+.env
+*.pem
+auth/keys/
+tests/
+.pytest_cache
+.mypy_cache
+htmlcov
+.coverage
+celerybeat-schedule
+celerybeat.pid

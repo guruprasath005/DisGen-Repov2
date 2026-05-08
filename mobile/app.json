@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "DisGen",
+    "slug": "disgen-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "DisGen needs camera access to photograph clinical documents.",
+        "NSPhotoLibraryUsageDescription": "DisGen needs photo library access to select clinical documents."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DisGen needs photo library access to select clinical documents.",
+          "cameraPermission": "DisGen needs camera access to photograph clinical documents."
+        }
+      ],
+      "expo-sharing"
+    ]
+  }
+}

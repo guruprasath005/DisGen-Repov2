@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{# PM-JAY: Required fields = pmjay_beneficiary_id, pmjay_preauth_number,
+                              hbp_package_code, hbp_procedure_code
+   Optional      = pmjay_hid_card_number, medco_name,
+                   implants_consumables, package_cost_approved
+   sf  = summary_fields dict (always a plain dict, safe to .get())
+   structured_data = raw OCR data (fallback for old summaries without sf)
+#}
+{% block scheme_panel %}
+<section class="panel">
+  <h2>PM-JAY Coverage</h2>
+  <dl class="kv-grid">
+    <dt>Beneficiary ID</dt>
+    <dd>{{ (sf.get('pmjay_beneficiary_id') or structured_data.get('pmjay_beneficiary_id')) or 'Not documented' }}</dd>
+
+    <dt>Pre-Auth Number</dt>
+    <dd>{{ (sf.get('pmjay_preauth_number') or structured_data.get('pmjay_preauth_number')) or 'Not documented' }}</dd>
+
+    <dt>HBP Package</dt>
+    <dd>{{ (sf.get('hbp_package_code') or structured_data.get('hbp_package_code')) or 'Not documented' }}</dd>
+
+    <dt>HBP Procedure</dt>
+    <dd>{{ (sf.get('hbp_procedure_code') or structured_data.get('hbp_procedure_code')) or 'Not documented' }}</dd>
+
+    <dt>Health ID (HID)</dt>
+    <dd>{{ (sf.get('pmjay_hid_card_number') or structured_data.get('pmjay_hid_card_number')) or '—' }}</dd>
+
+    <dt>MEDCO</dt>
+    <dd>{{ (sf.get('medco_name') or structured_data.get('medco_name')) or '—' }}</dd>
+
+    {% set pkg_cost = sf.get('package_cost_approved') or structured_data.get('package_cost_approved') %}
+    {% if pkg_cost %}
+    <dt>Package Cost</dt>
+    <dd>&#8377; {{ pkg_cost }}</dd>
+    {% endif %}
+  </dl>
+  {% set implants = sf.get('implants_consumables') or structured_data.get('implants_consumables') %}
+  {% if implants %}
+  <p style="margin: 8px 0 0; font-size: 9pt;">
+    <strong>Implants / Consumables:</strong> {{ implants }}
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

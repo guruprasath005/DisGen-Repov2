@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{# CMCHIS: Required = cmchis_card_number, cmchis_package_code
+   Optional = cmchis_package_name, coverage_amount_sanctioned,
+              hospital_empanelment_code, preauth_number, annual_benefit_used
+#}
+{% block scheme_panel %}
+<section class="panel">
+  <h2>CMCHIS Coverage</h2>
+  <dl class="kv-grid">
+    <dt>Smart Card No.</dt>
+    <dd>{{ (sf.get('cmchis_card_number') or structured_data.get('cmchis_card_number')) or 'Not documented' }}</dd>
+
+    <dt>Package Code</dt>
+    <dd>{{ (sf.get('cmchis_package_code') or structured_data.get('cmchis_package_code')) or 'Not documented' }}</dd>
+
+    <dt>Package Name</dt>
+    <dd>{{ (sf.get('cmchis_package_name') or structured_data.get('cmchis_package_name')) or '—' }}</dd>
+
+    <dt>Pre-Auth No.</dt>
+    <dd>{{ (sf.get('preauth_number') or structured_data.get('preauth_number')) or '—' }}</dd>
+
+    <dt>Empanelment Code</dt>
+    <dd>{{ (sf.get('hospital_empanelment_code') or structured_data.get('hospital_empanelment_code')) or '—' }}</dd>
+
+    {% set sanctioned = sf.get('coverage_amount_sanctioned') or structured_data.get('coverage_amount_sanctioned') %}
+    {% if sanctioned %}
+    <dt>Sanctioned</dt>
+    <dd>&#8377; {{ sanctioned }}</dd>
+    {% endif %}
+
+    {% set annual_used = sf.get('annual_benefit_used') or structured_data.get('annual_benefit_used') %}
+    {% if annual_used %}
+    <dt>Annual Used</dt>
+    <dd>&#8377; {{ annual_used }}</dd>
+    {% endif %}
+  </dl>
+</section>
+{% endblock %}
