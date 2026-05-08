@@ -103,14 +103,37 @@ export interface DocumentsStats {
   approved: number
 }
 
+interface StatsApiResponse {
+  total_documents: number
+  by_status: Record<string, number>
+  avg_ocr_confidence: number | null
+  uploads_last_7_days: { date: string; count: number }[]
+}
+
+const PROCESSING_STATUSES = new Set([
+  "processing",
+  "ocr_complete",
+  "extracting",
+  "generating",
+])
+
 export async function fetchStats(): Promise<DocumentsStats> {
   const token = getMemoryAccessToken()
-  const { data } = await api.get<DocumentsStats>("/documents/stats", {
+  const { data } = await api.get<StatsApiResponse>("/documents/stats", {
     ...(token
       ? { headers: { Authorization: `Bearer ${token}` } }
       : {}),
   })
-  return data
+  const by = data.by_status ?? {}
+  const processing = Object.entries(by)
+    .filter(([s]) => PROCESSING_STATUSES.has(s))
+    .reduce((sum, [, n]) => sum + n, 0)
+  return {
+    total: data.total_documents ?? 0,
+    pending: by["pending"] ?? 0,
+    processing,
+    approved: by["approved"] ?? 0,
+  }
 }
 
 export async function approveDocument(documentId: string): Promise<void> {
