@@ -11,19 +11,19 @@ function createGlassTabStyles(theme: ThemeTokens, isDark: boolean) {
   const clipBg =
     Platform.OS === "android"
       ? isDark
-        ? "rgba(30,41,59,0.94)"
+        ? "rgba(15,23,42,0.97)"
         : "rgba(252,252,253,0.94)"
       : isDark
-        ? "rgba(30,41,59,0.45)"
+        ? "rgba(15,23,42,0.82)"
         : "rgba(255,255,255,0.45)"
 
   const androidVeil =
     Platform.OS === "android"
       ? isDark
-        ? "rgba(30,41,59,0.82)"
+        ? "rgba(15,23,42,0.92)"
         : "rgba(255,255,255,0.72)"
       : isDark
-        ? "rgba(15,23,42,0.35)"
+        ? "rgba(15,23,42,0.68)"
         : "rgba(255,255,255,0.08)"
 
   return StyleSheet.create({
