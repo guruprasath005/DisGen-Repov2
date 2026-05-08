@@ -161,8 +161,17 @@ async def _check_name_unique(
         )
 
 
+async def _fetch_scheme_for_edit(db: AsyncSession, scheme_id: str) -> Scheme:
+    """Return any scheme (built-in or custom) for editing, or raise 404."""
+    result = await db.execute(select(Scheme).where(Scheme.id == scheme_id))
+    scheme = result.scalar_one_or_none()
+    if scheme is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheme not found.")
+    return scheme
+
+
 async def _fetch_custom_scheme(db: AsyncSession, scheme_id: str) -> Scheme:
-    """Return the scheme or raise 404. Raises 403 if the scheme is built-in."""
+    """Return a custom scheme for deletion, or raise 404/403 for built-ins."""
     result = await db.execute(select(Scheme).where(Scheme.id == scheme_id))
     scheme = result.scalar_one_or_none()
     if scheme is None:
@@ -170,7 +179,7 @@ async def _fetch_custom_scheme(db: AsyncSession, scheme_id: str) -> Scheme:
     if scheme.is_builtin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Built-in schemes are read-only.",
+            detail="Built-in schemes cannot be deleted.",
         )
     return scheme
 
@@ -296,16 +305,20 @@ async def update_custom_scheme(
     user: User = Depends(require_role("super_admin")),
 ) -> SchemeResponse:
     """
-    Full-replace a custom scheme's definition.
+    Full-replace a scheme's fields, rules, and PDF sections.
 
-    Also replaces the ChromaDB collection — the old RAG index is deleted and
-    rebuilt from the new rag_chunks (or rules if rag_chunks is empty).
+    Works for both built-in and custom schemes. Built-in scheme names are
+    immutable (name change is ignored). Also replaces the ChromaDB collection.
     """
-    scheme = await _fetch_custom_scheme(db, scheme_id)
-    await _check_name_unique(db, body.name, exclude_id=scheme_id)
+    scheme = await _fetch_scheme_for_edit(db, scheme_id)
 
     old_name = scheme.name
-    scheme.name = body.name
+    # Built-in scheme names are immutable — ignore name changes to prevent
+    # breaking the id/name coupling used by seeding and RAG lookups.
+    if not scheme.is_builtin:
+        await _check_name_unique(db, body.name, exclude_id=scheme_id)
+        scheme.name = body.name
+
     scheme.label = body.label
     scheme.color = body.color
     scheme.required_fields = [f.model_dump(exclude_none=True) for f in body.required_fields]

@@ -223,9 +223,16 @@ export default function SchemesPage() {
                       </dd>
                     </div>
                   </dl>
-                  <p className="inline-flex rounded-full border border-border/70 bg-muted/25 px-2.5 py-1 font-medium text-muted-foreground text-[10px] uppercase tracking-wide">
-                    Read-only
-                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 shadow-[var(--shadow-xs)]"
+                    onClick={() => openEdit(s)}
+                  >
+                    <Pencil className="size-3.5" aria-hidden />
+                    Edit
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -391,7 +398,11 @@ function EditorModal({
         <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-border/80 bg-card shadow-[var(--shadow-card)] outline-none">
           <div className="shrink-0 border-border/55 border-b bg-muted/25 px-6 py-5">
             <Dialog.Title className="font-heading font-semibold text-foreground text-lg tracking-tight">
-              {editingId ? "Edit custom scheme" : "Create custom scheme"}
+              {editingId
+                ? scheme?.is_builtin
+                  ? "Edit built-in scheme"
+                  : "Edit custom scheme"
+                : "Create custom scheme"}
             </Dialog.Title>
             <Dialog.Description className="mt-2 text-muted-foreground text-sm leading-relaxed">
               Define extraction fields, narrative rules, and PDF section headings.
@@ -402,6 +413,7 @@ function EditorModal({
             <SchemeEditorBody
               key={editingId ?? "create"}
               editingId={editingId}
+              isBuiltin={scheme?.is_builtin ?? false}
               scheme={scheme}
               qc={qc}
               onClose={() => onOpenChange(false)}
@@ -415,11 +427,13 @@ function EditorModal({
 
 function SchemeEditorBody({
   editingId,
+  isBuiltin,
   scheme,
   qc,
   onClose,
 }: {
   editingId: string | null
+  isBuiltin: boolean
   scheme?: SchemeResponse
   qc: ReturnType<typeof useQueryClient>
   onClose: () => void
@@ -543,6 +557,12 @@ function SchemeEditorBody({
       onSubmit={submit}
     >
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+        {isBuiltin && (
+          <div className="rounded-lg border border-amber-200/70 bg-amber-50/60 px-3 py-2.5 text-xs text-amber-800">
+            Built-in scheme — name is locked. You can edit fields, rules, and color.
+            Changes survive server restarts because they are persisted in the database.
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="scheme-name">Name (slug)</Label>
