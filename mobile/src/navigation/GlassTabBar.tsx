@@ -11,19 +11,19 @@ function createGlassTabStyles(theme: ThemeTokens, isDark: boolean) {
   const clipBg =
     Platform.OS === "android"
       ? isDark
-        ? "rgba(15,23,42,0.97)"
+        ? "#0F172A"
         : "rgba(252,252,253,0.94)"
       : isDark
-        ? "rgba(15,23,42,0.82)"
+        ? "#0F172A"
         : "rgba(255,255,255,0.45)"
 
   const androidVeil =
     Platform.OS === "android"
       ? isDark
-        ? "rgba(15,23,42,0.92)"
+        ? "rgba(15,23,42,0.0)"
         : "rgba(255,255,255,0.72)"
       : isDark
-        ? "rgba(15,23,42,0.68)"
+        ? "rgba(15,23,42,0.0)"
         : "rgba(255,255,255,0.08)"
 
   return StyleSheet.create({
@@ -78,7 +78,7 @@ export function GlassTabBar(props: BottomTabBarProps) {
       <View style={styles.shadowPlate}>
         <View style={styles.clip}>
           <BlurView
-            intensity={Platform.OS === "ios" ? 85 : 55}
+            intensity={isDark ? 0 : Platform.OS === "ios" ? 85 : 55}
             tint={isDark ? "dark" : "light"}
             style={[StyleSheet.absoluteFillObject, styles.blur]}
             pointerEvents="none"

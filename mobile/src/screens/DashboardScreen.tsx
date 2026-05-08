@@ -317,7 +317,7 @@ export function DashboardScreen() {
         </View>
 
         {user?.role === "doctor" ? (
-          <GlassCard intensity={40} contentStyle={{ paddingVertical: 14 }}>
+          <GlassCard intensity={40} style={{ marginTop: 16 }} contentStyle={{ paddingVertical: 14 }}>
             <View style={styles.doctorHint}>
               <Ionicons
                 name="bar-chart-outline"
