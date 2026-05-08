@@ -234,15 +234,28 @@ export default function DashboardPage() {
   const canViewStats =
     user?.role === "admin" || user?.role === "super_admin"
 
-  const statsQuery = useQuery({
-    queryKey: ["documents", "stats"],
-    queryFn: fetchDocumentStats,
-    enabled: Boolean(canViewStats),
-  })
+  // Poll every 4 s while any document is actively processing or generating,
+  // stop automatically once all jobs are done.
+  const ACTIVE_STATUSES = new Set(["processing", "extracting", "generating"])
 
   const documentsQuery = useQuery({
     queryKey: ["documents", "list", 1, 10],
     queryFn: () => fetchDocuments({ page: 1, per_page: 10 }),
+    refetchInterval: (query) =>
+      query.state.data?.documents.some((d) => ACTIVE_STATUSES.has(String(d.status)))
+        ? 4000
+        : false,
+  })
+
+  const hasActiveJobs = documentsQuery.data?.documents.some((d) =>
+    ACTIVE_STATUSES.has(String(d.status)),
+  )
+
+  const statsQuery = useQuery({
+    queryKey: ["documents", "stats"],
+    queryFn: fetchDocumentStats,
+    enabled: Boolean(canViewStats),
+    refetchInterval: hasActiveJobs ? 4000 : false,
   })
 
   const stats = statsQuery.data

@@ -8,7 +8,7 @@ import {
   Pencil,
   Sparkles,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
@@ -80,6 +80,9 @@ export default function DocumentViewPage() {
   const isDoctor = user?.role === "doctor"
 
   const [tab, setTab] = useState("ocr")
+  const prevStatusRef = useRef<string | undefined>(undefined)
+  const didInitTabRef = useRef(false)
+
   const [schemeModalOpen, setSchemeModalOpen] = useState(false)
   const [schemeManualPick, setSchemeManualPick] = useState<string | null>(
     null,
@@ -93,6 +96,39 @@ export default function DocumentViewPage() {
 
   const doc = docQuery.data
   const { isPolling } = useDocumentPolling(id, doc?.status)
+
+  // Auto-switch tabs when document status changes:
+  // - On first load: jump to the most relevant tab for current status
+  // - processing/extracting → ready: reveal structured data tab
+  // - generating → generated/approved: reveal summary tab
+  useEffect(() => {
+    if (!doc?.status) return
+    const status = String(doc.status)
+
+    if (!didInitTabRef.current) {
+      didInitTabRef.current = true
+      if (status === "generated" || status === "approved") {
+        setTab("summary")
+      } else if (STRUCTURED_TAB_STATUSES.has(status)) {
+        setTab("structured")
+      }
+      prevStatusRef.current = status
+      return
+    }
+
+    const prev = prevStatusRef.current
+    prevStatusRef.current = status
+
+    if (
+      (prev === "processing" || prev === "extracting") &&
+      STRUCTURED_TAB_STATUSES.has(status)
+    ) {
+      setTab("structured")
+    }
+    if (prev === "generating" && (status === "generated" || status === "approved")) {
+      setTab("summary")
+    }
+  }, [doc?.status])
 
   const structuredAllowed =
     doc?.status != null && STRUCTURED_TAB_STATUSES.has(String(doc.status))
