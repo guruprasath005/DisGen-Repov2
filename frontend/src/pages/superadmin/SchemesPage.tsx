@@ -395,7 +395,7 @@ function EditorModal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-border/80 bg-card shadow-[var(--shadow-card)] outline-none">
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[92vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-border/80 bg-card shadow-[var(--shadow-card)] outline-none">
           <div className="shrink-0 border-border/55 border-b bg-muted/25 px-6 py-5">
             <Dialog.Title className="font-heading font-semibold text-foreground text-lg tracking-tight">
               {editingId
@@ -702,66 +702,95 @@ function FieldMatrix({
       </div>
       <div className="space-y-3 rounded-xl border border-border/50 bg-white/50 p-3">
         {rows.map((row, i) => (
-          <div key={i} className="space-y-1.5 rounded-lg border border-border/30 bg-white/60 p-2.5">
-            {/* Row 1: slug + label + type + remove */}
-            <div className="flex flex-wrap gap-2">
-              <Input
-                aria-label={`${title} field slug ${i + 1}`}
-                placeholder="field_slug"
-                value={row.field}
-                onChange={(e) => update(i, { field: e.target.value })}
-                className="min-w-[110px] flex-1 bg-white/70 font-mono text-xs"
-              />
-              <Input
-                aria-label={`${title} label ${i + 1}`}
-                placeholder="Display label"
-                value={row.label}
-                onChange={(e) => update(i, { label: e.target.value })}
-                className="min-w-[130px] flex-[2] bg-white/70 text-sm"
-              />
-              <select
-                aria-label={`${title} type ${i + 1}`}
-                value={row.type}
-                onChange={(e) => update(i, { type: e.target.value })}
-                className={cn(
-                  "h-9 rounded-md border border-input bg-white/70 px-2 text-xs outline-none",
-                  "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
-                )}
-              >
-                {FIELD_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+          <div key={i} className="rounded-lg border border-border/30 bg-white/60 p-3 space-y-3">
+            {/* Header: field number + remove button */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                Field {i + 1}
+              </span>
               <Button
                 type="button"
                 size="icon-xs"
                 variant="ghost"
-                className="shrink-0 text-muted-foreground"
+                className="h-6 w-6 text-muted-foreground hover:text-destructive"
                 disabled={rows.length <= 1}
                 onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-                aria-label="Remove row"
+                aria-label="Remove field"
               >
                 ×
               </Button>
             </div>
+
+            {/* Row 1: slug + label + type — 3 columns on wider screens */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Slug</p>
+                <Input
+                  aria-label={`${title} field slug ${i + 1}`}
+                  placeholder="field_slug"
+                  value={row.field}
+                  onChange={(e) => update(i, { field: e.target.value })}
+                  className="bg-white/70 font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Display label</p>
+                <Input
+                  aria-label={`${title} label ${i + 1}`}
+                  placeholder="e.g. Discharge Medications"
+                  value={row.label}
+                  onChange={(e) => update(i, { label: e.target.value })}
+                  className="bg-white/70 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Type</p>
+                <select
+                  aria-label={`${title} type ${i + 1}`}
+                  value={row.type}
+                  onChange={(e) => update(i, { type: e.target.value })}
+                  className={cn(
+                    "h-9 w-full rounded-md border border-input bg-white/70 px-2 text-sm outline-none",
+                    "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
+                  )}
+                >
+                  {FIELD_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Row 2: section + hint */}
-            <div className="flex flex-wrap gap-2">
-              <Input
-                aria-label={`${title} section ${i + 1}`}
-                placeholder="Section heading (optional)"
-                value={row.section}
-                onChange={(e) => update(i, { section: e.target.value })}
-                className="min-w-[140px] flex-1 bg-white/70 text-xs"
-              />
-              <Input
-                aria-label={`${title} hint ${i + 1}`}
-                placeholder="Hint for LLM extraction (optional)"
-                value={row.hint}
-                onChange={(e) => update(i, { hint: e.target.value })}
-                className="min-w-[180px] flex-[2] bg-white/70 text-xs"
-              />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Section heading <span className="normal-case font-normal">(optional)</span>
+                </p>
+                <Input
+                  aria-label={`${title} section ${i + 1}`}
+                  placeholder="e.g. Medications, Identifiers"
+                  value={row.section}
+                  onChange={(e) => update(i, { section: e.target.value })}
+                  className="bg-white/70 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  LLM hint <span className="normal-case font-normal">(optional)</span>
+                </p>
+                <textarea
+                  aria-label={`${title} hint ${i + 1}`}
+                  placeholder="Extraction instruction for the AI…"
+                  value={row.hint}
+                  rows={2}
+                  onChange={(e) => update(i, { hint: e.target.value })}
+                  className={cn(
+                    "w-full resize-y rounded-md border border-input bg-white/70 px-2.5 py-2 text-xs outline-none leading-snug",
+                    "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
+                  )}
+                />
+              </div>
             </div>
           </div>
         ))}
