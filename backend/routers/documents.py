@@ -514,30 +514,43 @@ async def list_documents(
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(
-    user: User = Depends(require_role("admin", "super_admin")),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> StatsResponse:
-    """Aggregated document statistics for the Admin dashboard."""
+    """
+    Aggregated document statistics.
+
+    Admins and super-admins see global stats across all documents.
+    Doctors see stats scoped to their own uploaded documents.
+    """
+    is_admin = user.role in ("admin", "super_admin")
     not_deleted = Document.deleted_at.is_(None)
+
+    # Scope filter — doctors only see their own documents
+    scope = (
+        [not_deleted]
+        if is_admin
+        else [not_deleted, Document.uploaded_by == user.id]
+    )
 
     # Total count
     total = (
-        await db.execute(select(func.count(Document.id)).where(not_deleted))
+        await db.execute(select(func.count(Document.id)).where(*scope))
     ).scalar() or 0
 
     # Count per status
     status_rows = await db.execute(
         select(Document.status, func.count(Document.id).label("cnt"))
-        .where(not_deleted)
+        .where(*scope)
         .group_by(Document.status)
     )
     by_status = {row.status: row.cnt for row in status_rows}
 
-    # Average OCR confidence (only for documents that completed OCR)
+    # Average OCR confidence
     avg_conf = (
         await db.execute(
             select(func.avg(Document.ocr_confidence)).where(
-                not_deleted,
+                *scope,
                 Document.ocr_confidence.is_not(None),
             )
         )
@@ -551,7 +564,7 @@ async def get_stats(
             func.date(Document.created_at).label("day"),
             func.count(Document.id).label("cnt"),
         )
-        .where(not_deleted, Document.created_at >= since)
+        .where(*scope, Document.created_at >= since)
         .group_by(func.date(Document.created_at))
         .order_by(func.date(Document.created_at))
     )

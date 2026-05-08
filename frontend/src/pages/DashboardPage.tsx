@@ -231,8 +231,7 @@ const quickLinkClass =
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const canViewStats =
-    user?.role === "admin" || user?.role === "super_admin"
+  const canViewStats = Boolean(user)
 
   // Poll every 4 s while any document is actively processing or generating,
   // stop automatically once all jobs are done.
@@ -272,12 +271,11 @@ export default function DashboardPage() {
   }
 
   const statApprovedDisplay = (): string => {
-    if (canViewStats && stats) return String(stats.by_status.approved ?? 0)
+    if (stats) return String(stats.by_status.approved ?? 0)
     return "—"
   }
 
   const statOcrDisplay = (): string => {
-    if (!canViewStats) return "—"
     const v = stats?.avg_ocr_confidence
     if (v == null) return "—"
     const pct = v <= 1 ? v * 100 : v
@@ -285,12 +283,11 @@ export default function DashboardPage() {
   }
 
   const statUploadsWeekDisplay = (): string => {
-    if (!canViewStats || !stats) return "—"
+    if (!stats) return "—"
     return String(uploadsWeekSum(stats))
   }
 
   const ocrSubtitle = (): string | undefined => {
-    if (!canViewStats) return undefined
     const v = stats?.avg_ocr_confidence
     if (v == null) return "Across documents with OCR scores."
     const pct = v <= 1 ? v * 100 : v
@@ -303,9 +300,7 @@ export default function DashboardPage() {
   const statsRowLoading =
     statsLoading || (!canViewStats && documentsQuery.isLoading)
 
-  const byStatusForPills: Record<string, number> | undefined = canViewStats
-    ? stats?.by_status
-    : undefined
+  const byStatusForPills: Record<string, number> | undefined = stats?.by_status
 
   const pipelineSegments = useMemo(() => {
     if (!byStatusForPills) return []
@@ -428,16 +423,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {!canViewStats ? (
+      {user?.role === "doctor" ? (
         <Card className="border-border/80 bg-muted/30 shadow-[var(--shadow-card)]">
           <CardContent className="flex gap-3 py-4">
             <BarChart3 className="mt-0.5 size-5 shrink-0 text-primary stroke-[2.25px]" aria-hidden />
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Aggregate metrics and pipeline analytics require{" "}
-              <span className="font-medium text-foreground">Administrator</span>{" "}
-              or{" "}
-              <span className="font-medium text-foreground">Super Administrator</span>{" "}
-              access. Totals below reflect documents visible in your scope.
+              Metrics below reflect your own documents and submissions.
             </p>
           </CardContent>
         </Card>
@@ -452,9 +443,9 @@ export default function DashboardPage() {
             title="Documents in corpus"
             value={statTotalDisplay()}
             subtitle={
-              canViewStats
-                ? "Active records excluding soft-deleted artefacts."
-                : "Documents available to your account."
+              user?.role === "doctor"
+                ? "Documents uploaded by you."
+                : "Active records excluding soft-deleted artefacts."
             }
             icon={FileStack}
             loading={statsRowLoading}
@@ -575,14 +566,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {!canViewStats ? (
-          <Card className="border-border/80 shadow-[var(--shadow-card)]">
-            <CardContent className="py-12 text-center text-muted-foreground text-sm">
-              Status segmentation is available once elevated to an administrator
-              role.
-            </CardContent>
-          </Card>
-        ) : statsLoading ? (
+        {statsLoading ? (
           <Skeleton className="h-36 w-full rounded-xl" />
         ) : pipelineSegments.length === 0 ? (
           <Card className="border-border/80 shadow-[var(--shadow-card)]">
