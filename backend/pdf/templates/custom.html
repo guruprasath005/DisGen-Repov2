@@ -1,37 +1,278 @@
 {% extends "base.html" %}
 
-{# Custom-scheme template — renders all required and optional fields declared
-   in Scheme.required_fields / Scheme.optional_fields as a labeled field table.
-   Reads from summary_fields (sf) first, falls back to structured_data.        #}
+{#
+  Smart adaptive custom-scheme template.
 
-{% block scheme_panel %}{% endblock %}
+  Groups fields by their `section` attribute and renders each field
+  according to its `type`:
+    string      → labeled key/value table row
+    narrative   → full-width prose paragraph block
+    list        → labeled section with bullet list
+    medications → labeled section with structured drug table
+
+  Falls back gracefully when section is empty (unsectioned fields
+  are rendered first under the scheme name heading).
+#}
 
 {% block scheme_fields_table %}
-{% if required_field_defs or optional_field_defs %}
+{% set req_metas = required_field_metas or [] %}
+{% set opt_metas  = optional_field_metas  or [] %}
+{% set req_fields  = req_metas  | map(attribute='field') | list %}
+
+{% if req_metas or opt_metas %}
+<style>
+  /* ── Narrative block ──────────────────────────────── */
+  .narrative-block {
+    margin-bottom: 10px;
+    page-break-inside: avoid;
+  }
+  .narrative-block .narrative-label {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 3px;
+  }
+  .narrative-block .narrative-body {
+    font-size: 9.5pt;
+    color: #111827;
+    line-height: 1.5;
+    background: #f9fafb;
+    border-left: 3px solid #e5e7eb;
+    padding: 6px 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .narrative-block .narrative-body.field-empty {
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  /* ── List block ───────────────────────────────────── */
+  .list-block {
+    margin-bottom: 10px;
+    page-break-inside: avoid;
+  }
+  .list-block .list-label {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 3px;
+  }
+  .list-block ul {
+    margin: 0 0 0 16px;
+    padding: 0;
+    font-size: 9.5pt;
+    color: #111827;
+  }
+  .list-block ul li {
+    margin: 2px 0;
+    line-height: 1.4;
+  }
+  .list-block .list-empty {
+    font-size: 9.5pt;
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  /* ── Medications block ────────────────────────────── */
+  .med-block {
+    margin-bottom: 10px;
+    page-break-inside: avoid;
+  }
+  .med-block .med-label {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 3px;
+  }
+  .med-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  .med-table th {
+    background: #f3f4f6;
+    color: #374151;
+    font-weight: 600;
+    padding: 4px 8px;
+    text-align: left;
+    border: 1px solid #e5e7eb;
+    font-size: 8.5pt;
+  }
+  .med-table td {
+    padding: 4px 8px;
+    border: 1px solid #e5e7eb;
+    color: #111827;
+    vertical-align: top;
+  }
+  .med-table tr:nth-child(even) td {
+    background: #f9fafb;
+  }
+  .med-block .med-empty {
+    font-size: 9.5pt;
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  /* ── Section subheading ───────────────────────────── */
+  .section-subheading {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #374151;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 2px;
+    margin: 10px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    page-break-after: avoid;
+  }
+</style>
+
 <div class="fields-section">
   <h2>{{ scheme.label }}</h2>
-  <table class="field-table">
-    {% for field_name, field_label in required_field_defs %}
-      {% set display_val = sf.get(field_name) or structured_data.get(field_name) %}
-      {% set dv = display_val | field_display %}
-      <tr>
-        <td class="field-label">{{ field_label }}</td>
-        <td class="field-value {% if not dv %}field-empty{% endif %}">
-          {% if dv %}{{ dv }}{% else %}—{% endif %}
-        </td>
-      </tr>
+
+  {#
+    groupby sorts by grouper, so empty-string sections sort first ("" < "A").
+    We render unsectioned fields under no subheading, then each named section
+    under its own subheading.
+  #}
+  {% for section_group in (req_metas + opt_metas) | groupby("section") %}
+    {% set sec_name = section_group.grouper %}
+    {% if sec_name %}
+    <div class="section-subheading">{{ sec_name }}</div>
+    {% endif %}
+
+    {# Collect string-type fields for this section into a single table #}
+    {% set str_fields = [] %}
+    {% for meta in section_group.list %}
+      {% if (meta.type or 'string') == 'string' %}
+        {% set _ = str_fields.append(meta) %}
+      {% endif %}
     {% endfor %}
-    {% for field_name, field_label in optional_field_defs %}
-      {% set display_val = sf.get(field_name) or structured_data.get(field_name) %}
-      {% set dv = display_val | field_display %}
-      <tr class="field-optional">
-        <td class="field-label">{{ field_label }}</td>
-        <td class="field-value {% if not dv %}field-empty{% endif %}">
-          {% if dv %}{{ dv }}{% else %}—{% endif %}
-        </td>
-      </tr>
+
+    {# Render string fields as a key/value table first #}
+    {% if str_fields %}
+    <table class="field-table">
+      {% for meta in str_fields %}
+        {% set field_name = meta.field %}
+        {% set is_optional = field_name not in req_fields %}
+        {% set display_val = sf.get(field_name) or structured_data.get(field_name) %}
+        {% set dv = display_val | field_display %}
+        <tr{% if is_optional %} class="field-optional"{% endif %}>
+          <td class="field-label">{{ meta.label }}</td>
+          <td class="field-value {% if not dv %}field-empty{% endif %}">
+            {% if dv %}{{ dv }}{% else %}—{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+
+    {# Render non-string fields individually by type #}
+    {% for meta in section_group.list %}
+      {% set ftype = meta.type or 'string' %}
+      {% if ftype != 'string' %}
+        {% set field_name = meta.field %}
+        {% set display_val = sf.get(field_name) or structured_data.get(field_name) %}
+
+        {% if ftype == 'narrative' %}
+        {# ── Prose paragraph block ──────────────────────── #}
+        <div class="narrative-block">
+          <div class="narrative-label">{{ meta.label }}</div>
+          {% if display_val %}
+          <div class="narrative-body">{{ display_val | string | trim }}</div>
+          {% else %}
+          <div class="narrative-body field-empty">Not documented.</div>
+          {% endif %}
+        </div>
+
+        {% elif ftype == 'list' %}
+        {# ── Bullet list ────────────────────────────────── #}
+        <div class="list-block">
+          <div class="list-label">{{ meta.label }}</div>
+          {% if display_val %}
+            {% if display_val is string %}
+              {% set items = display_val.strip().split('\n') | reject('equalto', '') | list %}
+            {% elif display_val is iterable %}
+              {% set items = display_val | list %}
+            {% else %}
+              {% set items = [display_val | string] %}
+            {% endif %}
+            {% if items %}
+            <ul>
+              {% for item in items %}
+              <li>{{ item | string | trim }}</li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <span class="list-empty">Not documented.</span>
+            {% endif %}
+          {% else %}
+          <span class="list-empty">Not documented.</span>
+          {% endif %}
+        </div>
+
+        {% elif ftype == 'medications' %}
+        {# ── Medication table ───────────────────────────── #}
+        <div class="med-block">
+          <div class="med-label">{{ meta.label }}</div>
+          {% if display_val %}
+            {% if display_val is string %}
+              {% set med_lines = display_val.strip().split('\n') | reject('equalto', '') | list %}
+            {% elif display_val is iterable %}
+              {% set med_lines = display_val | map('string') | list %}
+            {% else %}
+              {% set med_lines = [display_val | string] %}
+            {% endif %}
+            {% if med_lines %}
+            <table class="med-table">
+              <thead>
+                <tr>
+                  <th style="width:40%">Medication</th>
+                  <th style="width:20%">Dose / Route</th>
+                  <th style="width:20%">Frequency</th>
+                  <th style="width:20%">Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for line in med_lines %}
+                  {# Try to parse "Drug: Dose - Route - Frequency - Duration" #}
+                  {% if ':' in line %}
+                    {% set parts = line.split(':', 1) %}
+                    {% set drug = parts[0] | trim %}
+                    {% set rest_parts = parts[1].split(' - ') %}
+                    <tr>
+                      <td>{{ drug }}</td>
+                      <td>{{ rest_parts[0] | trim if rest_parts | length > 0 else '—' }}</td>
+                      <td>{{ rest_parts[1] | trim if rest_parts | length > 1 else '—' }}</td>
+                      <td>{{ rest_parts[2] | trim if rest_parts | length > 2 else '—' }}</td>
+                    </tr>
+                  {% else %}
+                    {# Unstructured line — show in full width #}
+                    <tr><td colspan="4">{{ line | trim }}</td></tr>
+                  {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <span class="med-empty">Not documented.</span>
+            {% endif %}
+          {% else %}
+          <span class="med-empty">Not documented.</span>
+          {% endif %}
+        </div>
+
+        {% endif %}
+      {% endif %}
     {% endfor %}
-  </table>
+
+  {% endfor %}
 </div>
 {% endif %}
 {% endblock %}

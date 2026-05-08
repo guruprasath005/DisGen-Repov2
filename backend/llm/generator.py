@@ -294,6 +294,25 @@ def summary_json_to_markdown(summary_json: dict) -> str:
 # ── Scheme-field extraction (new field-based workflow) ────────────────────────
 
 
+_FIELD_TYPE_INSTRUCTIONS: dict[str, str] = {
+    "narrative": (
+        "Write as complete clinical prose. Multiple sentences are expected. "
+        "Do not use bullet points or lists — continuous paragraph text only."
+    ),
+    "list": (
+        "Write each item on its own line, one item per line, no bullet symbols or numbers. "
+        "Return null if nothing is documented."
+    ),
+    "medications": (
+        "Write each medication on its own line using the format: "
+        "'Drug Name: Dose/Route - Frequency - Duration'. "
+        "Example: 'Metformin 500mg oral: 1 tablet - Twice daily - 30 days'. "
+        "Return null if no medications are documented."
+    ),
+    "string": "",
+}
+
+
 def _build_fields_tool_spec(
     required_fields: list[dict],
     optional_fields: list[dict],
@@ -301,8 +320,9 @@ def _build_fields_tool_spec(
     """
     Build an OpenAI tool JSON schema from the scheme's field definitions.
 
-    Each field becomes a nullable string property. The tool forces the LLM
-    to return a flat {field_name: value | null} object — no free text.
+    Each field becomes a nullable string property with type-specific extraction
+    instructions in the description. The tool forces the LLM to return a flat
+    {field_name: value | null} object — no free text.
     """
     properties: dict[str, dict] = {}
     all_fields = list(required_fields or []) + list(optional_fields or [])
@@ -313,9 +333,14 @@ def _build_fields_tool_spec(
             continue
         label = f.get("label", field_name.replace("_", " ").title())
         hint = f.get("hint", "")
+        ftype = (f.get("type") or "string").strip() or "string"
+
         description = label
         if hint:
             description += f" — {hint}"
+        type_instruction = _FIELD_TYPE_INSTRUCTIONS.get(ftype, "")
+        if type_instruction:
+            description += f" [{type_instruction}]"
 
         properties[field_name] = {
             "type": ["string", "null"],

@@ -126,30 +126,39 @@ def _resolve_template_name(scheme_template: str | None) -> str:
 
 def _build_ordered_field_defs(
     scheme,
-) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+) -> tuple[list[dict], list[dict]]:
     """
-    Return (required_defs, optional_defs) as ordered lists of (field_name, label).
+    Return (required_metas, optional_metas) as ordered lists of field metadata dicts.
 
+    Each dict: {field, label, type, section, hint}
     Accepts fields in either shape:
-      - str  — used as both key and label (underscores → spaces, title-cased)
-      - dict — {"field": ..., "label": ...}  or  {"name": ..., "label": ...}
+      - str  — key=label, type="string", section="", hint=""
+      - dict — {"field"|"name", "label", "type"?, "section"?, "hint"?}
     """
-    def _parse(f: Any) -> tuple[str, str] | None:
+    def _parse(f: Any) -> dict | None:
         if isinstance(f, dict):
             name = (f.get("field") or f.get("name") or "").strip()
             label = (f.get("label") or "").strip() or name.replace("_", " ").title()
+            ftype = (f.get("type") or "string").strip() or "string"
+            section = (f.get("section") or "").strip()
+            hint = (f.get("hint") or "").strip()
         elif isinstance(f, str):
             name = f.strip()
             label = name.replace("_", " ").title()
+            ftype = "string"
+            section = ""
+            hint = ""
         else:
             return None
-        return (name, label) if name else None
+        if not name:
+            return None
+        return {"field": name, "label": label, "type": ftype, "section": section, "hint": hint}
 
     req_raw = getattr(scheme, "required_fields", None) or []
     opt_raw = getattr(scheme, "optional_fields", None) or []
-    required_defs = [d for f in req_raw if (d := _parse(f)) is not None]
-    optional_defs = [d for f in opt_raw if (d := _parse(f)) is not None]
-    return required_defs, optional_defs
+    required_metas = [d for f in req_raw if (d := _parse(f)) is not None]
+    optional_metas = [d for f in opt_raw if (d := _parse(f)) is not None]
+    return required_metas, optional_metas
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -203,7 +212,11 @@ def render_pdf(
     template_name = _resolve_template_name(getattr(scheme, "pdf_template", None))
     template = _env.get_template(template_name)
 
-    required_field_defs, optional_field_defs = _build_ordered_field_defs(scheme)
+    required_field_metas, optional_field_metas = _build_ordered_field_defs(scheme)
+
+    # Legacy-compat tuples for builtin templates that still unpack (field, label)
+    required_field_defs = [(m["field"], m["label"]) for m in required_field_metas]
+    optional_field_defs = [(m["field"], m["label"]) for m in optional_field_metas]
 
     # Legacy free-text path: convert Markdown → HTML only when needed.
     summary_html = _markdown_to_html(summary_text) if summary_text else ""
@@ -212,9 +225,12 @@ def render_pdf(
     sf: dict = summary_fields if isinstance(summary_fields, dict) else {}
 
     rendered_html = template.render(
-        # Field-based rendering
+        # Field-based rendering (full metadata for smart templates)
         summary_fields=summary_fields,        # None for legacy rows
         sf=sf,                                 # always a dict — safe .get()
+        required_field_metas=required_field_metas,
+        optional_field_metas=optional_field_metas,
+        # Legacy-compat tuples for builtin templates
         required_field_defs=required_field_defs,
         optional_field_defs=optional_field_defs,
         # Legacy free-text rendering (empty string when not applicable)

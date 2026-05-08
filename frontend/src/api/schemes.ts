@@ -4,8 +4,9 @@ export interface SchemeFieldItem {
   field: string
   label: string
   type?: string
-  validation?: string | null
+  section?: string | null
   hint?: string | null
+  validation?: string | null
   options?: string[] | null
 }
 

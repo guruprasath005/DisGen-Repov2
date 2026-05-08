@@ -40,22 +40,38 @@ function extractErr(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong"
 }
 
-function coerceFields(raw: unknown[]): { field: string; label: string }[] {
-  const mapped = raw.map((item) => {
-    if (item && typeof item === "object" && "field" in item && "label" in item) {
-      const o = item as Record<string, unknown>
-      return { field: String(o.field ?? ""), label: String(o.label ?? "") }
-    }
-    return { field: "", label: "" }
-  })
-  return mapped.length ? mapped : [{ field: "", label: "" }]
+type FieldRow = { field: string; label: string; type: string; section: string; hint: string }
+
+const FIELD_TYPES = ["string", "narrative", "list", "medications"] as const
+
+function emptyRow(): FieldRow {
+  return { field: "", label: "", type: "string", section: "", hint: "" }
 }
 
-function toPayloadField(row: { field: string; label: string }): SchemeFieldItem {
+function coerceFields(raw: unknown[]): FieldRow[] {
+  const mapped = raw.map((item) => {
+    if (item && typeof item === "object" && "field" in item) {
+      const o = item as Record<string, unknown>
+      return {
+        field: String(o.field ?? ""),
+        label: String(o.label ?? ""),
+        type: String(o.type ?? "string"),
+        section: String(o.section ?? ""),
+        hint: String(o.hint ?? ""),
+      }
+    }
+    return emptyRow()
+  })
+  return mapped.length ? mapped : [emptyRow()]
+}
+
+function toPayloadField(row: FieldRow): SchemeFieldItem {
   return {
     field: row.field.trim(),
     label: row.label.trim(),
-    type: "string",
+    type: row.type || "string",
+    ...(row.section.trim() ? { section: row.section.trim() } : {}),
+    ...(row.hint.trim() ? { hint: row.hint.trim() } : {}),
   }
 }
 
@@ -450,19 +466,11 @@ function SchemeEditorBody({
     editingId && scheme ? scheme.pdf_sections.join("\n") : "",
   )
   const [ragText, setRagText] = React.useState("")
-  const [requiredRows, setRequiredRows] = React.useState<
-    { field: string; label: string }[]
-  >(() =>
-    editingId && scheme
-      ? coerceFields(scheme.required_fields)
-      : [{ field: "", label: "" }],
+  const [requiredRows, setRequiredRows] = React.useState<FieldRow[]>(() =>
+    editingId && scheme ? coerceFields(scheme.required_fields) : [emptyRow()],
   )
-  const [optionalRows, setOptionalRows] = React.useState<
-    { field: string; label: string }[]
-  >(() =>
-    editingId && scheme
-      ? coerceFields(scheme.optional_fields)
-      : [{ field: "", label: "" }],
+  const [optionalRows, setOptionalRows] = React.useState<FieldRow[]>(() =>
+    editingId && scheme ? coerceFields(scheme.optional_fields) : [emptyRow()],
   )
 
   function splitLines(text: string): string[] {
@@ -522,11 +530,11 @@ function SchemeEditorBody({
   const pending = createMutation.isPending || updateMutation.isPending
 
   function addRequiredRow() {
-    setRequiredRows((r) => [...r, { field: "", label: "" }])
+    setRequiredRows((r) => [...r, emptyRow()])
   }
 
   function addOptionalRow() {
-    setOptionalRows((r) => [...r, { field: "", label: "" }])
+    setOptionalRows((r) => [...r, emptyRow()])
   }
 
   return (
@@ -656,12 +664,14 @@ function FieldMatrix({
   onAdd,
 }: {
   title: string
-  rows: { field: string; label: string }[]
-  setRows: React.Dispatch<
-    React.SetStateAction<{ field: string; label: string }[]>
-  >
+  rows: FieldRow[]
+  setRows: React.Dispatch<React.SetStateAction<FieldRow[]>>
   onAdd: () => void
 }) {
+  function update(i: number, patch: Partial<FieldRow>) {
+    setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -670,48 +680,69 @@ function FieldMatrix({
           Add row
         </Button>
       </div>
-      <div className="space-y-2 rounded-xl border border-border/50 bg-white/50 p-3">
+      <div className="space-y-3 rounded-xl border border-border/50 bg-white/50 p-3">
         {rows.map((row, i) => (
-          <div key={i} className="flex flex-wrap gap-2">
-            <Input
-              aria-label={`${title} field slug ${i + 1}`}
-              placeholder="field_slug"
-              value={row.field}
-              onChange={(e) =>
-                setRows((prev) =>
-                  prev.map((r, j) =>
-                    j === i ? { ...r, field: e.target.value } : r,
-                  ),
-                )
-              }
-              className="min-w-[120px] flex-1 bg-white/70 font-mono text-xs"
-            />
-            <Input
-              aria-label={`${title} label ${i + 1}`}
-              placeholder="Display label"
-              value={row.label}
-              onChange={(e) =>
-                setRows((prev) =>
-                  prev.map((r, j) =>
-                    j === i ? { ...r, label: e.target.value } : r,
-                  ),
-                )
-              }
-              className="min-w-[140px] flex-[2] bg-white/70 text-sm"
-            />
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="ghost"
-              className="shrink-0 text-muted-foreground"
-              disabled={rows.length <= 1}
-              onClick={() =>
-                setRows((prev) => prev.filter((_, j) => j !== i))
-              }
-              aria-label="Remove row"
-            >
-              ×
-            </Button>
+          <div key={i} className="space-y-1.5 rounded-lg border border-border/30 bg-white/60 p-2.5">
+            {/* Row 1: slug + label + type + remove */}
+            <div className="flex flex-wrap gap-2">
+              <Input
+                aria-label={`${title} field slug ${i + 1}`}
+                placeholder="field_slug"
+                value={row.field}
+                onChange={(e) => update(i, { field: e.target.value })}
+                className="min-w-[110px] flex-1 bg-white/70 font-mono text-xs"
+              />
+              <Input
+                aria-label={`${title} label ${i + 1}`}
+                placeholder="Display label"
+                value={row.label}
+                onChange={(e) => update(i, { label: e.target.value })}
+                className="min-w-[130px] flex-[2] bg-white/70 text-sm"
+              />
+              <select
+                aria-label={`${title} type ${i + 1}`}
+                value={row.type}
+                onChange={(e) => update(i, { type: e.target.value })}
+                className={cn(
+                  "h-9 rounded-md border border-input bg-white/70 px-2 text-xs outline-none",
+                  "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
+                )}
+              >
+                {FIELD_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                className="shrink-0 text-muted-foreground"
+                disabled={rows.length <= 1}
+                onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
+                aria-label="Remove row"
+              >
+                ×
+              </Button>
+            </div>
+            {/* Row 2: section + hint */}
+            <div className="flex flex-wrap gap-2">
+              <Input
+                aria-label={`${title} section ${i + 1}`}
+                placeholder="Section heading (optional)"
+                value={row.section}
+                onChange={(e) => update(i, { section: e.target.value })}
+                className="min-w-[140px] flex-1 bg-white/70 text-xs"
+              />
+              <Input
+                aria-label={`${title} hint ${i + 1}`}
+                placeholder="Hint for LLM extraction (optional)"
+                value={row.hint}
+                onChange={(e) => update(i, { hint: e.target.value })}
+                className="min-w-[180px] flex-[2] bg-white/70 text-xs"
+              />
+            </div>
           </div>
         ))}
       </div>
