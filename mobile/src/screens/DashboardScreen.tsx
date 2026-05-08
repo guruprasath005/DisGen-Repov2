@@ -103,9 +103,9 @@ function createDashboardStyles(theme: ThemeTokens) {
       color: theme.slate,
     },
     doctorHint: {
-      marginTop: 18,
       flexDirection: "row",
-      alignItems: "flex-start",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 12,
     },
     doctorHintText: {
@@ -114,6 +114,7 @@ function createDashboardStyles(theme: ThemeTokens) {
       lineHeight: 20,
       color: theme.muted,
       fontWeight: "500",
+      textAlign: "center",
     },
     metricsSection: {
       marginTop: 22,
