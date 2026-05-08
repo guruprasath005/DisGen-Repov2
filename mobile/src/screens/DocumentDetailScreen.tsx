@@ -369,6 +369,7 @@ export function DocumentDetailScreen() {
           styles.scrollPad,
           { paddingBottom: tabInset + 32 },
         ]}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={
