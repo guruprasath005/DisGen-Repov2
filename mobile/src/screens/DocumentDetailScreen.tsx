@@ -1095,7 +1095,7 @@ function StructuredTab({
         {data.icd10_secondary?.length ? (
           <View style={styles.blockGap}>
             <Text style={styles.fieldLabel}>Secondary ICD-10</Text>
-            {data.icd10_secondary.map((e, i) => (
+            {( data.icd10_secondary ?? [] ).map((e, i) => (
               <Text key={`${e.code}-${i}`} style={styles.icdSecondaryLine}>
                 {e.code} · {e.description}
               </Text>
@@ -1129,7 +1129,7 @@ function StructuredTab({
         ) : data.diagnoses?.length ? (
           <View style={styles.blockGap}>
             <Text style={styles.fieldLabel}>Diagnoses</Text>
-            {data.diagnoses.map((d, i) => (
+            {( data.diagnoses ?? [] ).map((d, i) => (
               <Text key={`${d}-${i}`} style={styles.bulletLine}>
                 • {d}
               </Text>
@@ -1142,7 +1142,7 @@ function StructuredTab({
         <CollapsibleSection title="Comorbidities & Allergies" defaultOpen>
           {data.comorbidities?.length ? (
             <View style={styles.pillRow}>
-              {data.comorbidities.map((c, i) => (
+              {( data.comorbidities ?? [] ).map((c, i) => (
                 <View key={`co-${i}`} style={styles.softPill}>
                   <Text style={styles.softPillText}>{c}</Text>
                 </View>
@@ -1151,7 +1151,7 @@ function StructuredTab({
           ) : null}
           {data.allergies?.length ? (
             <View style={[styles.pillRow, styles.blockGap]}>
-              {data.allergies.map((a, i) => (
+              {( data.allergies ?? [] ).map((a, i) => (
                 <View key={`al-${i}`} style={styles.softPill}>
                   <Text style={styles.softPillText}>{a}</Text>
                 </View>
@@ -1245,7 +1245,7 @@ function StructuredTab({
         </CollapsibleSection>
       ) : data.medications?.length ? (
         <CollapsibleSection title="Medications" defaultOpen>
-          {data.medications.map((m, i) => (
+          {( data.medications ?? [] ).map((m, i) => (
             <MedicationRow key={`med-${i}`} med={m} />
           ))}
         </CollapsibleSection>
@@ -1269,7 +1269,7 @@ function StructuredTab({
 
       {data.investigations?.length ? (
         <CollapsibleSection title="Investigations" defaultOpen>
-          {data.investigations.map((inv, i) => (
+          {( data.investigations ?? [] ).map((inv, i) => (
             <InvestigationRow key={`inv-${i}`} inv={inv} />
           ))}
         </CollapsibleSection>
@@ -1277,7 +1277,7 @@ function StructuredTab({
 
       {data.procedures?.length ? (
         <CollapsibleSection title="Procedures" defaultOpen>
-          {data.procedures.map((p, i) => (
+          {( data.procedures ?? [] ).map((p, i) => (
             <Text key={`proc-${i}`} style={styles.bulletLine}>
               • {p}
             </Text>
