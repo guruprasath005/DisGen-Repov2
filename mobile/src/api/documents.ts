@@ -149,13 +149,30 @@ export async function approveDocument(documentId: string): Promise<void> {
   )
 }
 
+interface StructuredDataApiResponse {
+  document_id: string
+  data: Record<string, unknown>
+  data_confirmed: boolean
+  version: number
+  updated_at: string
+  excluded_fields: string[]
+}
+
+function unwrapStructured(res: StructuredDataApiResponse): StructuredDataDto {
+  return {
+    ...(res.data as Omit<StructuredDataDto, "data_confirmed" | "version">),
+    data_confirmed: res.data_confirmed,
+    version: res.version,
+  }
+}
+
 export async function patchStructuredData(
   documentId: string,
   body: Partial<StructuredDataDto>,
 ): Promise<StructuredDataDto> {
   const token = getMemoryAccessToken()
-  const { data } = await api.patch<StructuredDataDto>(
-    `/documents/${documentId}/structured-data`,
+  const { data } = await api.patch<StructuredDataApiResponse>(
+    `/documents/${documentId}/structured`,
     body,
     {
       ...(token
@@ -163,7 +180,7 @@ export async function patchStructuredData(
         : {}),
     },
   )
-  return data
+  return unwrapStructured(data)
 }
 
 export async function fetchDocuments(params: {
@@ -245,10 +262,10 @@ export async function fetchStructuredData(
   id: string,
 ): Promise<StructuredDataDto | null> {
   try {
-    const { data } = await api.get<StructuredDataDto>(
+    const { data } = await api.get<StructuredDataApiResponse>(
       `/documents/${id}/structured`,
     )
-    return data
+    return unwrapStructured(data)
   } catch {
     return null
   }

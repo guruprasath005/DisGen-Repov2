@@ -107,7 +107,8 @@ function segmentFilled(leftStepIndex: number, status: string): boolean {
   return pipelineStepVisual(leftStepIndex, status) === "complete"
 }
 
-function parseSummaryMarkdown(md: string): { heading: string; body: string }[] {
+function parseSummaryMarkdown(md: string | null | undefined): { heading: string; body: string }[] {
+  if (!md) return []
   const trimmed = md.trim()
   if (!trimmed) return []
   const lines = trimmed.split(/\r?\n/)
