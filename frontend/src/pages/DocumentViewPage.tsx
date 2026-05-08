@@ -196,7 +196,25 @@ export default function DocumentViewPage() {
       void queryClient.invalidateQueries({ queryKey: ["document", id] })
     },
     onError: (e: unknown) => {
-      toast.error(extractErr(e))
+      const missingFieldSlugs = extractMissingFields(e)
+      if (missingFieldSlugs.length > 0) {
+        // Map slugs → labels using scheme field definitions
+        const summary = queryClient.getQueryData<SummaryLatestResponse>([
+          "document", id, "summary", "latest",
+        ])
+        const scheme = schemesQuery.data?.find((s) => s.id === summary?.scheme)
+        const allFields = [
+          ...(scheme?.required_fields ?? []),
+          ...(scheme?.optional_fields ?? []),
+        ]
+        const labels = missingFieldSlugs.map((slug) => {
+          const f = allFields.find((x) => x.field === slug)
+          return f?.label ?? slug.replace(/_/g, " ")
+        })
+        toast.error(`Fill in required fields before approving: ${labels.join(", ")}`)
+      } else {
+        toast.error(extractErr(e))
+      }
     },
   })
 
@@ -536,9 +554,24 @@ function extractErr(e: unknown): string {
   if (axios.isAxiosError(e)) {
     const d = e.response?.data as { detail?: unknown }
     if (typeof d?.detail === "string") return d.detail
+    if (d?.detail && typeof d.detail === "object") {
+      const det = d.detail as Record<string, unknown>
+      if (typeof det.message === "string") return det.message
+    }
     return e.message || "Request failed"
   }
   return e instanceof Error ? e.message : "Something went wrong"
+}
+
+function extractMissingFields(e: unknown): string[] {
+  if (axios.isAxiosError(e)) {
+    const d = e.response?.data as { detail?: unknown }
+    if (d?.detail && typeof d.detail === "object") {
+      const det = d.detail as Record<string, unknown>
+      if (Array.isArray(det.missing_fields)) return det.missing_fields as string[]
+    }
+  }
+  return []
 }
 
 function LockedTab({ message }: { message: string }) {
