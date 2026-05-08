@@ -159,8 +159,73 @@ interface StructuredDataApiResponse {
 }
 
 function unwrapStructured(res: StructuredDataApiResponse): StructuredDataDto {
+  const d = res.data as Record<string, unknown>
+  const str = (k: string): string | null => (d[k] as string) ?? null
+
+  const medications: Medication[] = (
+    (d.medications_during_stay ?? d.discharge_medications ?? d.medications ?? []) as Record<string, unknown>[]
+  ).map((m) => ({
+    name: (m.name as string) ?? "",
+    dose: (m.dose as string) ?? null,
+    route: (m.route as string) ?? null,
+    frequency: (m.frequency as string) ?? null,
+    duration: (m.duration as string) ?? null,
+    normalized: (m.normalized as boolean) ?? undefined,
+  }))
+
+  const investigations: Investigation[] = (
+    (d.investigations ?? []) as Record<string, unknown>[]
+  ).map((i) => ({
+    name: (i.name as string) ?? "",
+    result: (i.value ?? i.result) as string ?? null,
+    unit: (i.unit as string) ?? null,
+    normal_range: (i.reference_range ?? i.normal_range) as string ?? null,
+    date: (i.date as string) ?? null,
+  }))
+
+  const procedures: string[] = (
+    (d.procedures ?? []) as Record<string, unknown>[]
+  ).map((p) =>
+    [p.name, p.date, p.notes].filter(Boolean).join(" — "),
+  )
+
+  const vitals: Vitals = {
+    bp: (d.blood_pressure ?? d.bp) as string ?? null,
+    pulse: (d.pulse_rate ?? d.pulse) as string ?? null,
+    temp: (d.temperature ?? d.temp) as string ?? null,
+    spo2: (d.oxygen_saturation ?? d.spo2) as string ?? null,
+    weight: str("weight"),
+    height: str("height"),
+  }
+
   return {
-    ...(res.data as Omit<StructuredDataDto, "data_confirmed" | "version">),
+    patient_name: str("patient_name"),
+    patient_age: (d.age ?? d.patient_age) as string ?? null,
+    patient_gender: (d.gender ?? d.patient_gender) as string ?? null,
+    uhid: str("uhid"),
+    abha_id: str("abha_id"),
+    phone: str("phone"),
+    admission_date: str("admission_date"),
+    discharge_date: str("discharge_date"),
+    ward: str("ward"),
+    bed_number: str("bed_number"),
+    treating_doctor: str("treating_doctor"),
+    referring_doctor: str("referring_doctor"),
+    hospital_name: str("hospital_name"),
+    chief_complaint: (d.presenting_complaints
+      ? (d.presenting_complaints as string[]).join(", ")
+      : str("chief_complaint")),
+    history: str("history"),
+    clinical_summary: str("clinical_summary"),
+    icd10_primary: (d.icd10_primary as Icd10Entry) ?? null,
+    icd10_secondary: (d.icd10_secondary as Icd10Entry[]) ?? [],
+    diagnoses: (d.secondary_diagnoses ?? d.diagnoses) as string[] ?? [],
+    medications,
+    vitals,
+    investigations,
+    procedures,
+    allergies: (d.allergies as string[]) ?? [],
+    comorbidities: (d.comorbidities as string[]) ?? [],
     data_confirmed: res.data_confirmed,
     version: res.version,
   }
