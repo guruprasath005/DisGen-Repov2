@@ -1,3 +1,4 @@
+import NetInfo from "@react-native-community/netinfo"
 import * as DocumentPicker from "expo-document-picker"
 import * as FileSystem from "expo-file-system/legacy"
 import * as ImagePicker from "expo-image-picker"
@@ -22,8 +23,10 @@ import {
   uploadDischargeDocument,
 } from "../api/documents"
 import { GlassCard } from "../components/GlassCard"
+import { useTheme } from "../contexts/ThemeContext"
+import { useUploadQueue } from "../hooks/useUploadQueue"
 import { useTabBarInset } from "../hooks/useTabBarInset"
-import { theme } from "../theme"
+import type { ThemeTokens } from "../theme"
 
 function mimeFromPick(mime: string | undefined, name: string): string {
   if (mime && mime !== "") return mime
@@ -46,8 +49,253 @@ function escapeHtmlAttr(value: string): string {
 
 const MAX_CAMERA_PHOTOS = 20
 
+function createUploadStyles(theme: ThemeTokens) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    scroll: {
+      paddingHorizontal: 20,
+      paddingTop: 10,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "700",
+      color: theme.navy,
+      letterSpacing: -0.6,
+    },
+    subtitle: {
+      marginTop: 8,
+      fontSize: 14,
+      color: theme.muted,
+      lineHeight: 21,
+      marginBottom: 18,
+      maxWidth: 340,
+    },
+    cardShell: {
+      marginBottom: 8,
+    },
+    cardInner: {
+      paddingHorizontal: 22,
+      paddingVertical: 22,
+    },
+    label: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.slate,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+    },
+    labelGap: {
+      marginTop: 18,
+    },
+    input: {
+      marginTop: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.glassStroke,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      paddingVertical: Platform.OS === "ios" ? 15 : 13,
+      fontSize: 16,
+      color: theme.navy,
+      backgroundColor: theme.glassFill,
+    },
+    segment: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 12,
+    },
+    segmentBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.glassStroke,
+      backgroundColor: theme.glassFillMuted,
+      alignItems: "center",
+    },
+    segmentBtnActive: {
+      borderColor: theme.orange,
+      backgroundColor: "rgba(249,115,22,0.12)",
+    },
+    segmentLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.muted,
+    },
+    segmentLabelActive: {
+      color: theme.orangeDark,
+    },
+    consentRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginTop: 22,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.glassStroke,
+      backgroundColor: theme.glassFillMuted,
+    },
+    consentText: {
+      flex: 1,
+      fontSize: 14,
+      color: theme.navy,
+      lineHeight: 20,
+      fontWeight: "500",
+    },
+    pickRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "flex-start",
+      gap: 12,
+      marginTop: 22,
+    },
+    pickBtn: {
+      flex: 1,
+      minWidth: 130,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 16,
+      borderWidth: 2,
+      borderColor: theme.orange,
+      backgroundColor: theme.glassFillStrong,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    pickBtnText: {
+      fontWeight: "700",
+      color: theme.orangeDark,
+      fontSize: 15,
+    },
+    disabled: {
+      opacity: 0.55,
+    },
+    fileName: {
+      marginTop: 14,
+      fontSize: 14,
+      color: theme.slate,
+      fontWeight: "600",
+    },
+    fileHint: {
+      marginTop: 14,
+      fontSize: 13,
+      color: theme.muted,
+    },
+    photoCount: {
+      marginTop: 14,
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.slate,
+    },
+    thumbStrip: {
+      flexDirection: "row",
+      gap: 10,
+      paddingVertical: 12,
+      paddingRight: 4,
+    },
+    thumbWrap: {
+      width: 82,
+      height: 82,
+      borderRadius: 14,
+      overflow: "hidden",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.glassStroke,
+      backgroundColor: theme.border,
+    },
+    thumbImage: {
+      width: "100%",
+      height: "100%",
+    },
+    thumbRemove: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: "rgba(15,23,42,0.72)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    thumbRemoveGlyph: {
+      color: theme.white,
+      fontSize: 14,
+      fontWeight: "700",
+      marginTop: -1,
+    },
+    progressOuter: {
+      marginTop: 18,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: theme.border,
+      overflow: "hidden",
+    },
+    progressInner: {
+      height: "100%",
+      borderRadius: 999,
+      backgroundColor: theme.orange,
+    },
+    errBanner: {
+      marginTop: 18,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: theme.errorBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(190,18,60,0.25)",
+    },
+    errText: {
+      color: theme.error,
+      fontWeight: "600",
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    okBanner: {
+      marginTop: 18,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: "rgba(34,197,94,0.1)",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(34,197,94,0.35)",
+    },
+    okText: {
+      color: "#15803D",
+      fontWeight: "600",
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    uploadBtn: {
+      marginTop: 26,
+      backgroundColor: theme.orange,
+      paddingVertical: 17,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 56,
+      shadowColor: theme.orangeDark,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.28,
+      shadowRadius: 18,
+      elevation: 8,
+    },
+    uploadBtnBusy: {
+      opacity: 0.85,
+    },
+    uploadBtnText: {
+      color: theme.white,
+      fontSize: 17,
+      fontWeight: "700",
+    },
+  })
+}
+
 export function UploadScreen() {
   const tabInset = useTabBarInset()
+  const { theme } = useTheme()
+  const styles = React.useMemo(() => createUploadStyles(theme), [theme])
+  const { enqueue, refreshQueue } = useUploadQueue()
   const [patientName, setPatientName] = React.useState("")
   const [pick, setPick] = React.useState<DocumentPicker.DocumentPickerAsset | null>(
     null,
@@ -151,12 +399,34 @@ export function UploadScreen() {
           )
           .join("")
 
-        let pdfUri: string | null = null
+        let pdfUriForCleanup: string | null = null
         try {
           const { uri } = await Print.printToFileAsync({ html })
-          pdfUri = uri
-
           const fileName = `discharge_photos_${Date.now()}.pdf`
+
+          const net = await NetInfo.fetch()
+          if (!net.isConnected) {
+            await enqueue({
+              patientName: name,
+              fileUri: uri,
+              fileName,
+              mimeType: "application/pdf",
+              consentGiven: consentConfirmed,
+              consentMethod,
+              retries: 0,
+            })
+            await refreshQueue()
+            setSuccess(
+              "No connection — upload queued. Will send automatically when online.",
+            )
+            setPatientName("")
+            setPick(null)
+            setCameraPhotos([])
+            setProgress(null)
+            return
+          }
+
+          pdfUriForCleanup = uri
 
           const res = await uploadDischargeDocument({
             patientName: name,
@@ -183,10 +453,10 @@ export function UploadScreen() {
           setCameraPhotos([])
           setProgress(null)
         } finally {
-          if (pdfUri != null) {
-            await FileSystem.deleteAsync(pdfUri, { idempotent: true }).catch(
-              () => undefined,
-            )
+          if (pdfUriForCleanup != null) {
+            await FileSystem.deleteAsync(pdfUriForCleanup, {
+              idempotent: true,
+            }).catch(() => undefined)
           }
         }
 
@@ -195,6 +465,27 @@ export function UploadScreen() {
 
       const fileName = pick!.name ?? "document.pdf"
       const mimeType = mimeFromPick(pick!.mimeType ?? undefined, fileName)
+
+      const netPick = await NetInfo.fetch()
+      if (!netPick.isConnected) {
+        await enqueue({
+          patientName: name,
+          fileUri: pick!.uri,
+          fileName,
+          mimeType,
+          consentGiven: consentConfirmed,
+          consentMethod,
+          retries: 0,
+        })
+        await refreshQueue()
+        setSuccess(
+          "No connection — upload queued. Will send automatically when online.",
+        )
+        setPatientName("")
+        setPick(null)
+        setProgress(null)
+        return
+      }
 
       const res = await uploadDischargeDocument({
         patientName: name,
@@ -404,243 +695,3 @@ export function UploadScreen() {
     </SafeAreaView>
   )
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: theme.navy,
-    letterSpacing: -0.6,
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    color: theme.muted,
-    lineHeight: 21,
-    marginBottom: 18,
-    maxWidth: 340,
-  },
-  cardShell: {
-    marginBottom: 8,
-  },
-  cardInner: {
-    paddingHorizontal: 22,
-    paddingVertical: 22,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: theme.slate,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  labelGap: {
-    marginTop: 18,
-  },
-  input: {
-    marginTop: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glassStroke,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "ios" ? 15 : 13,
-    fontSize: 16,
-    color: theme.navy,
-    backgroundColor: theme.glassFill,
-  },
-  segment: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glassStroke,
-    backgroundColor: theme.glassFillMuted,
-    alignItems: "center",
-  },
-  segmentBtnActive: {
-    borderColor: theme.orange,
-    backgroundColor: "rgba(249,115,22,0.12)",
-  },
-  segmentLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: theme.muted,
-  },
-  segmentLabelActive: {
-    color: theme.orangeDark,
-  },
-  consentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 22,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glassStroke,
-    backgroundColor: theme.glassFillMuted,
-  },
-  consentText: {
-    flex: 1,
-    fontSize: 14,
-    color: theme.navy,
-    lineHeight: 20,
-    fontWeight: "500",
-  },
-  pickRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-    gap: 12,
-    marginTop: 22,
-  },
-  pickBtn: {
-    flex: 1,
-    minWidth: 130,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: theme.orange,
-    backgroundColor: theme.glassFillStrong,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pickBtnText: {
-    fontWeight: "700",
-    color: theme.orangeDark,
-    fontSize: 15,
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-  fileName: {
-    marginTop: 14,
-    fontSize: 14,
-    color: theme.slate,
-    fontWeight: "600",
-  },
-  fileHint: {
-    marginTop: 14,
-    fontSize: 13,
-    color: theme.muted,
-  },
-  photoCount: {
-    marginTop: 14,
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.slate,
-  },
-  thumbStrip: {
-    flexDirection: "row",
-    gap: 10,
-    paddingVertical: 12,
-    paddingRight: 4,
-  },
-  thumbWrap: {
-    width: 82,
-    height: 82,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glassStroke,
-    backgroundColor: theme.border,
-  },
-  thumbImage: {
-    width: "100%",
-    height: "100%",
-  },
-  thumbRemove: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "rgba(15,23,42,0.72)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbRemoveGlyph: {
-    color: theme.white,
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: -1,
-  },
-  progressOuter: {
-    marginTop: 18,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: theme.border,
-    overflow: "hidden",
-  },
-  progressInner: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: theme.orange,
-  },
-  errBanner: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: theme.errorBg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(190,18,60,0.25)",
-  },
-  errText: {
-    color: theme.error,
-    fontWeight: "600",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  okBanner: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: "rgba(34,197,94,0.1)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(34,197,94,0.35)",
-  },
-  okText: {
-    color: "#15803D",
-    fontWeight: "600",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  uploadBtn: {
-    marginTop: 26,
-    backgroundColor: theme.orange,
-    paddingVertical: 17,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 56,
-    shadowColor: theme.orangeDark,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  uploadBtnBusy: {
-    opacity: 0.85,
-  },
-  uploadBtnText: {
-    color: theme.white,
-    fontSize: 17,
-    fontWeight: "700",
-  },
-})

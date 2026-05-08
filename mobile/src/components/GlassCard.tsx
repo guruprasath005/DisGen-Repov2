@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from "react-native"
 
-import { theme } from "../theme"
+import { useTheme } from "../contexts/ThemeContext"
 
 interface GlassCardProps {
   children: React.ReactNode
@@ -24,15 +24,57 @@ export function GlassCard({
   contentStyle,
   intensity = Platform.OS === "ios" ? 48 : 36,
 }: GlassCardProps) {
+  const { theme, isDark } = useTheme()
+
+  const styles = React.useMemo(
+    () =>
+      StyleSheet.create({
+        shell: {
+          borderRadius: 20,
+          overflow: "hidden",
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.glassStroke,
+          shadowColor: "#0F172A",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: isDark ? 0.45 : 0.08,
+          shadowRadius: 24,
+          elevation: 10,
+          backgroundColor: theme.glassFillStrong,
+        },
+        blur: {
+          borderRadius: 20,
+        },
+        fallbackTint: {
+          backgroundColor:
+            Platform.OS === "android"
+              ? theme.glassFillStrong
+              : isDark
+                ? "rgba(30,41,59,0.35)"
+                : "rgba(255,255,255,0.12)",
+          borderRadius: 20,
+        },
+        rim: {
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: theme.glassStrokeBright,
+          opacity: isDark ? 0.25 : 0.45,
+        },
+        inner: {
+          position: "relative",
+          padding: 22,
+        },
+      }),
+    [theme, isDark],
+  )
+
   return (
     <View style={[styles.shell, style]}>
       <BlurView
         intensity={intensity}
-        tint="light"
+        tint={isDark ? "dark" : "light"}
         style={[StyleSheet.absoluteFillObject, styles.blur]}
         pointerEvents="none"
       />
-      {/* Solid fallback helps Android readability while blur composites */}
       <View
         style={[styles.fallbackTint, StyleSheet.absoluteFillObject]}
         pointerEvents="none"
@@ -42,38 +84,3 @@ export function GlassCard({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  shell: {
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glassStroke,
-    shadowColor: theme.navy,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.09,
-    shadowRadius: 28,
-    elevation: 8,
-    backgroundColor: theme.glassFillStrong,
-  },
-  blur: {
-    borderRadius: 22,
-  },
-  fallbackTint: {
-    backgroundColor:
-      Platform.OS === "android"
-        ? "rgba(255,255,255,0.82)"
-        : "rgba(255,255,255,0.12)",
-    borderRadius: 22,
-  },
-  rim: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: theme.glassStrokeBright,
-    opacity: 0.45,
-  },
-  inner: {
-    position: "relative",
-    padding: 22,
-  },
-})

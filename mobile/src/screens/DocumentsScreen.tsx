@@ -11,12 +11,67 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fetchDocuments, type DocumentDto } from "../api/documents"
 import { DocumentCard } from "../components/DocumentCard"
 import { GlassSearchBar } from "../components/GlassSearchBar"
-import { useTabBarInset } from "../hooks/useTabBarInset"
+import { useTheme } from "../contexts/ThemeContext"
 import { useOpenDocumentDetail } from "../hooks/useOpenDocumentDetail"
-import { theme } from "../theme"
+import { useTabBarInset } from "../hooks/useTabBarInset"
+import type { ThemeTokens } from "../theme"
+
+function createDocumentsStyles(theme: ThemeTokens) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 4,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "700",
+      color: theme.navy,
+      letterSpacing: -0.6,
+    },
+    subtitle: {
+      marginTop: 6,
+      fontSize: 14,
+      color: theme.muted,
+    },
+    searchWrap: {
+      paddingHorizontal: 20,
+      marginBottom: 8,
+      marginTop: 14,
+    },
+    listContent: {
+      paddingHorizontal: 20,
+    },
+    centerNote: {
+      textAlign: "center",
+      marginTop: 24,
+      color: theme.muted,
+      fontSize: 14,
+    },
+    error: {
+      marginHorizontal: 20,
+      color: theme.error,
+      fontWeight: "500",
+      marginBottom: 8,
+    },
+    empty: {
+      marginTop: 32,
+      textAlign: "center",
+      fontSize: 15,
+      color: theme.muted,
+      paddingHorizontal: 24,
+    },
+  })
+}
 
 export function DocumentsScreen() {
   const tabInset = useTabBarInset()
+  const { theme } = useTheme()
+  const styles = React.useMemo(() => createDocumentsStyles(theme), [theme])
   const openDetail = useOpenDocumentDetail()
   const [docs, setDocs] = React.useState<DocumentDto[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -45,7 +100,11 @@ export function DocumentsScreen() {
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return docs
-    return docs.filter((d) => d.filename.toLowerCase().includes(q))
+    return docs.filter((d) => {
+      const byName = d.patient_name?.toLowerCase().includes(q) ?? false
+      const byFile = d.filename.toLowerCase().includes(q)
+      return byName || byFile
+    })
   }, [docs, query])
 
   function onRefresh() {
@@ -62,7 +121,7 @@ export function DocumentsScreen() {
 
       <View style={styles.searchWrap}>
         <GlassSearchBar
-          placeholder="Search by patient name…"
+          placeholder="Search by patient or filename…"
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -106,53 +165,3 @@ export function DocumentsScreen() {
     </SafeAreaView>
   )
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: theme.navy,
-    letterSpacing: -0.6,
-  },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: theme.muted,
-  },
-  searchWrap: {
-    paddingHorizontal: 20,
-    marginBottom: 8,
-    marginTop: 14,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-  },
-  centerNote: {
-    textAlign: "center",
-    marginTop: 24,
-    color: theme.muted,
-    fontSize: 14,
-  },
-  error: {
-    marginHorizontal: 20,
-    color: theme.error,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  empty: {
-    marginTop: 32,
-    textAlign: "center",
-    fontSize: 15,
-    color: theme.muted,
-    paddingHorizontal: 24,
-  },
-})

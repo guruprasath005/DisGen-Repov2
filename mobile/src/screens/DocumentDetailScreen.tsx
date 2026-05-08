@@ -6,29 +6,36 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 
+import axios from "axios"
 import {
   type Investigation,
   type Medication,
   type StructuredDataDto,
   type SummaryDto,
   type DocumentDto,
+  type Vitals,
+  approveDocument,
   fetchDocumentDetail,
   fetchStructuredData,
   fetchSummary,
+  patchStructuredData,
   pollDocumentStatus,
 } from "../api/documents"
 import { API_BASE_URL, getMemoryAccessToken } from "../api/client"
 import { GlassCard } from "../components/GlassCard"
 import { useTabBarInset } from "../hooks/useTabBarInset"
 import type { MainStackParamList } from "../navigation/types"
-import { theme } from "../theme"
+import { useTheme } from "../contexts/ThemeContext"
+import type { ThemeTokens } from "../theme"
 import { formatStatusLabel, statusBadgeStyle } from "../utils/statusBadge"
 
 type DetailRoute = RouteProp<MainStackParamList, "DocumentDetail">
@@ -173,8 +180,23 @@ export function DocumentDetailScreen() {
   )
   const [tab, setTab] = React.useState<TabKey>("info")
   const [downloading, setDownloading] = React.useState(false)
+  const [detailRefreshing, setDetailRefreshing] = React.useState(false)
+  const [structuredEditing, setStructuredEditing] = React.useState(false)
+
+  const { theme } = useTheme()
+  const styles = React.useMemo(() => createDetailStyles(theme), [theme])
+  const detailBundle = React.useMemo(
+    () => ({ styles, theme }),
+    [styles, theme],
+  )
 
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
+
+  React.useEffect(() => {
+    if (tab !== "structured") {
+      setStructuredEditing(false)
+    }
+  }, [tab])
 
   const fetchSecondary = React.useCallback(async () => {
     const [str, sum] = await Promise.all([
@@ -236,6 +258,26 @@ export function DocumentDetailScreen() {
     }
   }, [documentId, fetchSecondary, stopPolling])
 
+  const handleRefresh = React.useCallback(async () => {
+    setDetailRefreshing(true)
+    try {
+      const d = await fetchDocumentDetail(documentId)
+      setDoc(d)
+      if (isTerminalStatus(d.status)) {
+        setSecondaryLoading(true)
+        try {
+          await fetchSecondary()
+        } finally {
+          setSecondaryLoading(false)
+        }
+      }
+    } catch {
+      /* ignore refresh errors */
+    } finally {
+      setDetailRefreshing(false)
+    }
+  }, [documentId, fetchSecondary])
+
   React.useEffect(() => {
     void loadDocument()
     return () => {
@@ -279,43 +321,48 @@ export function DocumentDetailScreen() {
 
   if (loading && !doc) {
     return (
-      <SafeAreaView style={styles.safe} edges={["bottom"]}>
-        <View style={styles.fullSpinner}>
-          <ActivityIndicator size="large" color={theme.orange} />
-        </View>
-      </SafeAreaView>
+      <DetailThemeContext.Provider value={detailBundle}>
+        <SafeAreaView style={styles.safe} edges={["bottom"]}>
+          <View style={styles.fullSpinner}>
+            <ActivityIndicator size="large" color={theme.orange} />
+          </View>
+        </SafeAreaView>
+      </DetailThemeContext.Provider>
     )
   }
 
   if (error || !doc) {
     return (
-      <SafeAreaView style={styles.safe} edges={["bottom"]}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollPad,
-            { paddingBottom: tabInset + 32 },
-          ]}
-        >
-          <Text style={styles.errTitle}>Something went wrong</Text>
-          <Text style={styles.errBody}>{error ?? "Unknown error"}</Text>
-          <Pressable
-            style={styles.retryBtn}
-            onPress={() => void loadDocument()}
+      <DetailThemeContext.Provider value={detailBundle}>
+        <SafeAreaView style={styles.safe} edges={["bottom"]}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollPad,
+              { paddingBottom: tabInset + 32 },
+            ]}
           >
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+            <Text style={styles.errTitle}>Something went wrong</Text>
+            <Text style={styles.errBody}>{error ?? "Unknown error"}</Text>
+            <Pressable
+              style={styles.retryBtn}
+              onPress={() => void loadDocument()}
+            >
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
+          </ScrollView>
+        </SafeAreaView>
+      </DetailThemeContext.Provider>
     )
   }
 
-  const badge = statusBadgeStyle(doc.status)
+  const badge = statusBadgeStyle(doc.status, theme)
   const polling = shouldPollStatus(doc.status)
   const chipDate = formatChipDate(doc.created_at)
   const ocrStr = ocrPercent(doc.ocr_confidence)
 
   return (
-    <SafeAreaView style={styles.safe} edges={["bottom"]}>
+    <DetailThemeContext.Provider value={detailBundle}>
+      <SafeAreaView style={styles.safe} edges={["bottom"]}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollPad,
@@ -323,6 +370,15 @@ export function DocumentDetailScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          structuredEditing ? undefined : (
+            <RefreshControl
+              refreshing={detailRefreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={theme.orange}
+            />
+          )
+        }
       >
         <GlassCard intensity={44} style={styles.cardGap}>
           <Text style={styles.filename} numberOfLines={2}>
@@ -400,6 +456,9 @@ export function DocumentDetailScreen() {
             data={structured}
             loading={secondaryLoading}
             awaitingPipeline={!isTerminalStatus(doc.status)}
+            documentId={documentId}
+            onSaved={(updated) => setStructured(updated)}
+            onEditingChange={setStructuredEditing}
           />
         ) : (
           <SummaryTab
@@ -408,14 +467,22 @@ export function DocumentDetailScreen() {
             awaitingPipeline={!isTerminalStatus(doc.status)}
             downloading={downloading}
             onDownloadPdf={() => void handleDownloadPdf()}
+            documentId={documentId}
+            onApproved={() =>
+              setSummary((prev) =>
+                prev ? { ...prev, status: "approved" } : prev,
+              )
+            }
           />
         )}
       </ScrollView>
     </SafeAreaView>
+    </DetailThemeContext.Provider>
   )
 }
 
 function PipelineIndicator({ status }: { status: string }) {
+  const { styles } = useDetailTheme()
   return (
     <GlassCard intensity={40} style={styles.cardGap} contentStyle={styles.pipelineInner}>
       <Text style={styles.sectionHeading}>Pipeline</Text>
@@ -449,6 +516,7 @@ function PipelineStep({
   label: string
   status: string
 }) {
+  const { styles } = useDetailTheme()
   const visual = pipelineStepVisual(stepIndex, status)
 
   const circleStyle =
@@ -487,6 +555,7 @@ function PipelineStep({
 }
 
 function InfoTab({ doc }: { doc: DocumentDto }) {
+  const { styles } = useDetailTheme()
   return (
     <GlassCard intensity={44} contentStyle={styles.tabCardInner}>
       <FieldRow label="Document ID" value={doc.id} mono selectable />
@@ -517,6 +586,7 @@ function FieldRow({
   mono?: boolean
   selectable?: boolean
 }) {
+  const { styles } = useDetailTheme()
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -530,15 +600,209 @@ function FieldRow({
   )
 }
 
+function cloneStructured(d: StructuredDataDto): StructuredDataDto {
+  return JSON.parse(JSON.stringify(d)) as StructuredDataDto
+}
+
+const STRUCTURED_PATCH_STRING_KEYS: (keyof StructuredDataDto)[] = [
+  "patient_name",
+  "patient_age",
+  "patient_gender",
+  "uhid",
+  "abha_id",
+  "phone",
+  "admission_date",
+  "discharge_date",
+  "ward",
+  "bed_number",
+  "hospital_name",
+  "referring_doctor",
+  "treating_doctor",
+]
+
+function buildStructuredPatch(
+  base: StructuredDataDto,
+  draft: StructuredDataDto,
+): Partial<StructuredDataDto> {
+  const patch: Partial<StructuredDataDto> = {}
+  for (const key of STRUCTURED_PATCH_STRING_KEYS) {
+    if (draft[key] !== base[key]) {
+      ;(patch as Record<string, unknown>)[key as string] = draft[key]
+    }
+  }
+  if (JSON.stringify(draft.diagnoses) !== JSON.stringify(base.diagnoses)) {
+    patch.diagnoses = draft.diagnoses
+  }
+  if (JSON.stringify(draft.medications) !== JSON.stringify(base.medications)) {
+    patch.medications = draft.medications
+  }
+  if (JSON.stringify(draft.vitals) !== JSON.stringify(base.vitals)) {
+    patch.vitals = draft.vitals
+  }
+  return patch
+}
+
+function saveFailureDetail(err: unknown): string {
+  if (!axios.isAxiosError(err)) {
+    return "Save failed. Please try again."
+  }
+  const respData = err.response?.data
+  if (respData && typeof respData === "object" && "detail" in respData) {
+    const detail = (respData as { detail: unknown }).detail
+    if (typeof detail === "string" && detail.trim()) return detail
+    if (Array.isArray(detail)) {
+      const parts = detail.map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg)
+        }
+        return String(item)
+      })
+      const joined = parts.filter(Boolean).join("; ")
+      if (joined) return joined
+    }
+  }
+  return "Save failed. Please try again."
+}
+
+function StructuredFieldInput({
+  label,
+  value,
+  onChangeText,
+  mono,
+}: {
+  label: string
+  value: string | null | undefined
+  onChangeText: (t: string) => void
+  mono?: boolean
+}) {
+  const { styles, theme } = useDetailTheme()
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.structuredInput, mono && styles.fieldMono]}
+        value={value ?? ""}
+        onChangeText={onChangeText}
+        placeholderTextColor={theme.muted}
+      />
+    </View>
+  )
+}
+
+const VITAL_GRID_FIELDS: { label: string; key: keyof Vitals }[] = [
+  { label: "BP", key: "bp" },
+  { label: "Pulse", key: "pulse" },
+  { label: "Temp", key: "temp" },
+  { label: "SpO₂", key: "spo2" },
+  { label: "Weight", key: "weight" },
+  { label: "Height", key: "height" },
+]
+
+function VitalsGridEditable({
+  vitals,
+  onChangeField,
+}: {
+  vitals: Vitals
+  onChangeField: (key: keyof Vitals, value: string) => void
+}) {
+  const { styles, theme } = useDetailTheme()
+  return (
+    <View style={styles.vitalsGrid}>
+      {VITAL_GRID_FIELDS.map(({ label, key }) => (
+        <View key={key} style={styles.vitalsCell}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          <TextInput
+            style={styles.structuredInput}
+            value={vitals[key] ?? ""}
+            onChangeText={(t) => onChangeField(key, t)}
+            placeholderTextColor={theme.muted}
+          />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function emptyMedication(): Medication {
+  return {
+    name: "",
+    dose: "",
+    route: "",
+    frequency: "",
+    duration: "",
+  }
+}
+
 function StructuredTab({
   data,
   loading,
   awaitingPipeline,
+  documentId,
+  onSaved,
+  onEditingChange,
 }: {
   data: StructuredDataDto | null | undefined
   loading: boolean
   awaitingPipeline: boolean
+  documentId: string
+  onSaved: (updated: StructuredDataDto) => void
+  onEditingChange?: (editing: boolean) => void
 }) {
+  const { styles, theme } = useDetailTheme()
+  const [editing, setEditing] = React.useState(false)
+  const [draft, setDraft] = React.useState<StructuredDataDto | null>(null)
+  const [saving, setSaving] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
+  const baselineRef = React.useRef<StructuredDataDto | null>(null)
+
+  React.useEffect(() => {
+    onEditingChange?.(editing)
+  }, [editing, onEditingChange])
+
+  React.useEffect(() => {
+    if (data === null || data === undefined) {
+      setEditing(false)
+      setDraft(null)
+      baselineRef.current = null
+      setSaveError(null)
+    }
+  }, [data])
+
+  const beginEdit = React.useCallback(() => {
+    if (!data) return
+    baselineRef.current = cloneStructured(data)
+    setDraft(cloneStructured(data))
+    setEditing(true)
+    setSaveError(null)
+  }, [data])
+
+  const cancelEdit = React.useCallback(() => {
+    setDraft(null)
+    baselineRef.current = null
+    setEditing(false)
+    setSaveError(null)
+  }, [])
+
+  const handleSave = React.useCallback(async () => {
+    if (!draft || !baselineRef.current) return
+    const patch = buildStructuredPatch(baselineRef.current, draft)
+    if (Object.keys(patch).length === 0) {
+      cancelEdit()
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const updated = await patchStructuredData(documentId, patch)
+      cancelEdit()
+      onSaved(updated)
+    } catch (e: unknown) {
+      setSaveError(saveFailureDetail(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [draft, documentId, onSaved, cancelEdit])
+
   if (awaitingPipeline && data === undefined) {
     return (
       <GlassCard intensity={44} contentStyle={styles.emptyTab}>
@@ -565,45 +829,256 @@ function StructuredTab({
     )
   }
 
+  const row = editing && draft ? draft : data
+
+  const setStr = (
+    key:
+      | "patient_name"
+      | "patient_age"
+      | "patient_gender"
+      | "uhid"
+      | "abha_id"
+      | "phone"
+      | "admission_date"
+      | "discharge_date"
+      | "ward"
+      | "bed_number"
+      | "hospital_name"
+      | "referring_doctor"
+      | "treating_doctor",
+    val: string,
+  ) => {
+    setDraft((prev) =>
+      prev ? { ...prev, [key]: val.trim() === "" ? null : val } : prev,
+    )
+  }
+
+  const updateVital = (key: keyof Vitals, val: string) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+      const nextVitals: Vitals = { ...(prev.vitals ?? {}) }
+      nextVitals[key] = val.trim() === "" ? null : val
+      return { ...prev, vitals: nextVitals }
+    })
+  }
+
+  const updateDiagnosis = (index: number, val: string) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+      const next = [...prev.diagnoses]
+      next[index] = val
+      return { ...prev, diagnoses: next }
+    })
+  }
+
+  const removeDiagnosis = (index: number) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        diagnoses: prev.diagnoses.filter((_, i) => i !== index),
+      }
+    })
+  }
+
+  const addDiagnosis = () => {
+    setDraft((prev) =>
+      prev ? { ...prev, diagnoses: [...prev.diagnoses, ""] } : prev,
+    )
+  }
+
+  const updateMedication = (index: number, medPatch: Partial<Medication>) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+      const next = prev.medications.map((m, i) =>
+        i === index ? { ...m, ...medPatch } : m,
+      )
+      return { ...prev, medications: next }
+    })
+  }
+
+  const removeMedication = (index: number) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        medications: prev.medications.filter((_, i) => i !== index),
+      }
+    })
+  }
+
+  const addMedication = () => {
+    setDraft((prev) =>
+      prev
+        ? { ...prev, medications: [...prev.medications, emptyMedication()] }
+        : prev,
+    )
+  }
+
   return (
     <View style={styles.structuredWrap}>
-      <View style={styles.confirmChipRow}>
-        <View
-          style={[
-            styles.confirmChip,
-            data.data_confirmed ? styles.confirmChipGreen : styles.confirmChipAmber,
-          ]}
-        >
-          <Text
+      <View style={styles.structChipBar}>
+        {saveError ? (
+          <View style={styles.structSaveErrBanner}>
+            <Text style={styles.structSaveErrText}>{saveError}</Text>
+          </View>
+        ) : null}
+        <View style={styles.confirmChipRow}>
+          <View
             style={[
-              styles.confirmChipText,
-              data.data_confirmed
-                ? styles.confirmChipTextGreen
-                : styles.confirmChipTextAmber,
+              styles.confirmChip,
+              row.data_confirmed
+                ? styles.confirmChipGreen
+                : styles.confirmChipAmber,
             ]}
           >
-            {data.data_confirmed ? "Data confirmed" : "Awaiting confirmation"}
-          </Text>
+            <Text
+              style={[
+                styles.confirmChipText,
+                row.data_confirmed
+                  ? styles.confirmChipTextGreen
+                  : styles.confirmChipTextAmber,
+              ]}
+            >
+              {row.data_confirmed ? "Data confirmed" : "Awaiting confirmation"}
+            </Text>
+          </View>
+          <View style={styles.confirmChipActions}>
+            {!editing ? (
+              <Pressable onPress={beginEdit} hitSlop={8}>
+                <Text style={styles.structEditBtn}>Edit</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.structEditActions}>
+                <Pressable
+                  onPress={cancelEdit}
+                  disabled={saving}
+                  hitSlop={8}
+                >
+                  <Text
+                    style={[
+                      styles.structCancelBtn,
+                      saving && styles.structActionMuted,
+                    ]}
+                  >
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleSave()}
+                  disabled={saving}
+                  hitSlop={8}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={theme.orange} />
+                  ) : (
+                    <Text style={styles.structSaveBtn}>Save</Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
       <CollapsibleSection title="Patient" defaultOpen>
-        <Nullable label="Name" value={data.patient_name} />
-        <Nullable label="Age" value={data.patient_age} />
-        <Nullable label="Gender" value={data.patient_gender} />
-        <Nullable label="UHID" value={data.uhid} mono />
-        <Nullable label="ABHA ID" value={data.abha_id} mono />
-        <Nullable label="Phone" value={data.phone} />
+        {editing && draft ? (
+          <>
+            <StructuredFieldInput
+              label="Name"
+              value={draft.patient_name}
+              onChangeText={(t) => setStr("patient_name", t)}
+            />
+            <StructuredFieldInput
+              label="Age"
+              value={draft.patient_age}
+              onChangeText={(t) => setStr("patient_age", t)}
+            />
+            <StructuredFieldInput
+              label="Gender"
+              value={draft.patient_gender}
+              onChangeText={(t) => setStr("patient_gender", t)}
+            />
+            <StructuredFieldInput
+              label="UHID"
+              value={draft.uhid}
+              onChangeText={(t) => setStr("uhid", t)}
+              mono
+            />
+            <StructuredFieldInput
+              label="ABHA ID"
+              value={draft.abha_id}
+              onChangeText={(t) => setStr("abha_id", t)}
+              mono
+            />
+            <StructuredFieldInput
+              label="Phone"
+              value={draft.phone}
+              onChangeText={(t) => setStr("phone", t)}
+            />
+          </>
+        ) : (
+          <>
+            <Nullable label="Name" value={data.patient_name} />
+            <Nullable label="Age" value={data.patient_age} />
+            <Nullable label="Gender" value={data.patient_gender} />
+            <Nullable label="UHID" value={data.uhid} mono />
+            <Nullable label="ABHA ID" value={data.abha_id} mono />
+            <Nullable label="Phone" value={data.phone} />
+          </>
+        )}
       </CollapsibleSection>
 
       <CollapsibleSection title="Admission" defaultOpen>
-        <Nullable label="Admission date" value={data.admission_date} />
-        <Nullable label="Discharge date" value={data.discharge_date} />
-        <Nullable label="Ward" value={data.ward} />
-        <Nullable label="Bed number" value={data.bed_number} />
-        <Nullable label="Treating doctor" value={data.treating_doctor} />
-        <Nullable label="Referring doctor" value={data.referring_doctor} />
-        <Nullable label="Hospital name" value={data.hospital_name} />
+        {editing && draft ? (
+          <>
+            <StructuredFieldInput
+              label="Admission date"
+              value={draft.admission_date}
+              onChangeText={(t) => setStr("admission_date", t)}
+            />
+            <StructuredFieldInput
+              label="Discharge date"
+              value={draft.discharge_date}
+              onChangeText={(t) => setStr("discharge_date", t)}
+            />
+            <StructuredFieldInput
+              label="Ward"
+              value={draft.ward}
+              onChangeText={(t) => setStr("ward", t)}
+            />
+            <StructuredFieldInput
+              label="Bed number"
+              value={draft.bed_number}
+              onChangeText={(t) => setStr("bed_number", t)}
+            />
+            <StructuredFieldInput
+              label="Treating doctor"
+              value={draft.treating_doctor}
+              onChangeText={(t) => setStr("treating_doctor", t)}
+            />
+            <StructuredFieldInput
+              label="Referring doctor"
+              value={draft.referring_doctor}
+              onChangeText={(t) => setStr("referring_doctor", t)}
+            />
+            <StructuredFieldInput
+              label="Hospital name"
+              value={draft.hospital_name}
+              onChangeText={(t) => setStr("hospital_name", t)}
+            />
+          </>
+        ) : (
+          <>
+            <Nullable label="Admission date" value={data.admission_date} />
+            <Nullable label="Discharge date" value={data.discharge_date} />
+            <Nullable label="Ward" value={data.ward} />
+            <Nullable label="Bed number" value={data.bed_number} />
+            <Nullable label="Treating doctor" value={data.treating_doctor} />
+            <Nullable label="Referring doctor" value={data.referring_doctor} />
+            <Nullable label="Hospital name" value={data.hospital_name} />
+          </>
+        )}
       </CollapsibleSection>
 
       <CollapsibleSection title="Diagnosis" defaultOpen>
@@ -625,7 +1100,31 @@ function StructuredTab({
             ))}
           </View>
         ) : null}
-        {data.diagnoses?.length ? (
+        {editing && draft ? (
+          <View style={styles.blockGap}>
+            <Text style={styles.fieldLabel}>Diagnoses</Text>
+            {draft.diagnoses.map((diag, i) => (
+              <View key={`diag-${i}`} style={styles.diagnosisEditRow}>
+                <TextInput
+                  style={[styles.structuredInput, styles.diagnosisEditInput]}
+                  value={diag}
+                  onChangeText={(t) => updateDiagnosis(i, t)}
+                  placeholderTextColor={theme.muted}
+                />
+                <Pressable
+                  onPress={() => removeDiagnosis(i)}
+                  hitSlop={10}
+                  style={styles.diagnosisRemoveBtn}
+                >
+                  <Text style={styles.diagnosisRemoveGlyph}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+            <Pressable onPress={addDiagnosis} hitSlop={8}>
+              <Text style={styles.structAddLink}>+ Add diagnosis</Text>
+            </Pressable>
+          </View>
+        ) : data.diagnoses?.length ? (
           <View style={styles.blockGap}>
             <Text style={styles.fieldLabel}>Diagnoses</Text>
             {data.diagnoses.map((d, i) => (
@@ -660,7 +1159,89 @@ function StructuredTab({
         </CollapsibleSection>
       ) : null}
 
-      {data.medications?.length ? (
+      {editing && draft ? (
+        <CollapsibleSection title="Medications" defaultOpen>
+          {draft.medications.map((m, i) => (
+            <View key={`med-edit-${i}`} style={styles.medEditCard}>
+              <Pressable
+                style={styles.medRemoveBtn}
+                onPress={() => removeMedication(i)}
+                hitSlop={10}
+              >
+                <Text style={styles.medRemoveGlyph}>✕</Text>
+              </Pressable>
+              <StructuredFieldInput
+                label="Name"
+                value={m.name}
+                onChangeText={(t) =>
+                  updateMedication(i, {
+                    name: t,
+                  })
+                }
+              />
+              <View style={styles.medEditTwoCol}>
+                <View style={styles.medEditCol}>
+                  <Text style={styles.fieldLabel}>Dose</Text>
+                  <TextInput
+                    style={styles.structuredInput}
+                    value={m.dose ?? ""}
+                    onChangeText={(t) =>
+                      updateMedication(i, {
+                        dose: t.trim() === "" ? null : t,
+                      })
+                    }
+                    placeholderTextColor={theme.muted}
+                  />
+                </View>
+                <View style={styles.medEditCol}>
+                  <Text style={styles.fieldLabel}>Route</Text>
+                  <TextInput
+                    style={styles.structuredInput}
+                    value={m.route ?? ""}
+                    onChangeText={(t) =>
+                      updateMedication(i, {
+                        route: t.trim() === "" ? null : t,
+                      })
+                    }
+                    placeholderTextColor={theme.muted}
+                  />
+                </View>
+              </View>
+              <View style={styles.medEditTwoCol}>
+                <View style={styles.medEditCol}>
+                  <Text style={styles.fieldLabel}>Frequency</Text>
+                  <TextInput
+                    style={styles.structuredInput}
+                    value={m.frequency ?? ""}
+                    onChangeText={(t) =>
+                      updateMedication(i, {
+                        frequency: t.trim() === "" ? null : t,
+                      })
+                    }
+                    placeholderTextColor={theme.muted}
+                  />
+                </View>
+                <View style={styles.medEditCol}>
+                  <Text style={styles.fieldLabel}>Duration</Text>
+                  <TextInput
+                    style={styles.structuredInput}
+                    value={m.duration ?? ""}
+                    onChangeText={(t) =>
+                      updateMedication(i, {
+                        duration: t.trim() === "" ? null : t,
+                      })
+                    }
+                    placeholderTextColor={theme.muted}
+                  />
+                </View>
+              </View>
+            </View>
+          ))}
+          <Pressable onPress={addMedication} hitSlop={8}>
+            <Text style={styles.structAddLink}>+ Add medication</Text>
+          </Pressable>
+        </CollapsibleSection>
+      ) : data.medications?.length ? (
         <CollapsibleSection title="Medications" defaultOpen>
           {data.medications.map((m, i) => (
             <MedicationRow key={`med-${i}`} med={m} />
@@ -668,8 +1249,17 @@ function StructuredTab({
         </CollapsibleSection>
       ) : null}
 
-      {data.vitals &&
-      Object.values(data.vitals).some((v) => v != null && String(v).trim()) ? (
+      {editing && draft ? (
+        <CollapsibleSection title="Vitals" defaultOpen>
+          <VitalsGridEditable
+            vitals={draft.vitals ?? {}}
+            onChangeField={updateVital}
+          />
+        </CollapsibleSection>
+      ) : data.vitals &&
+        Object.values(data.vitals).some(
+          (v) => v != null && String(v).trim(),
+        ) ? (
         <CollapsibleSection title="Vitals" defaultOpen>
           <VitalsGrid vitals={data.vitals} />
         </CollapsibleSection>
@@ -705,11 +1295,13 @@ function Nullable({
   value: string | null | undefined
   mono?: boolean
 }) {
+  const { styles } = useDetailTheme()
   if (value == null || String(value).trim() === "") return null
   return <FieldRow label={label} value={String(value)} mono={mono} />
 }
 
 function MedicationRow({ med }: { med: Medication }) {
+  const { styles } = useDetailTheme()
   const bits = [med.dose, med.route, med.frequency, med.duration].filter(
     (x) => x != null && String(x).trim() !== "",
   )
@@ -727,6 +1319,7 @@ function MedicationRow({ med }: { med: Medication }) {
 }
 
 function VitalsGrid({ vitals }: { vitals: NonNullable<StructuredDataDto["vitals"]> }) {
+  const { styles } = useDetailTheme()
   const pairs: [string, string][] = []
   const push = (label: string, v: string | null | undefined) => {
     if (v != null && String(v).trim() !== "") pairs.push([label, String(v)])
@@ -751,6 +1344,7 @@ function VitalsGrid({ vitals }: { vitals: NonNullable<StructuredDataDto["vitals"
 }
 
 function InvestigationRow({ inv }: { inv: Investigation }) {
+  const { styles } = useDetailTheme()
   const main = [inv.result, inv.unit].filter(Boolean).join(" ")
   return (
     <View style={styles.invBlock}>
@@ -772,6 +1366,7 @@ function CollapsibleSection({
   defaultOpen: boolean
   children: React.ReactNode
 }) {
+  const { styles } = useDetailTheme()
   const [open, setOpen] = React.useState(defaultOpen)
   return (
     <GlassCard intensity={42} style={styles.cardGap} contentStyle={styles.collapsibleInner}>
@@ -787,19 +1382,65 @@ function CollapsibleSection({
   )
 }
 
+function approveFailureDetail(err: unknown): string {
+  if (!axios.isAxiosError(err)) {
+    return "Approval failed. Please try again."
+  }
+  const data = err.response?.data
+  if (data && typeof data === "object" && "detail" in data) {
+    const detail = (data as { detail: unknown }).detail
+    if (typeof detail === "string" && detail.trim()) return detail
+    if (Array.isArray(detail)) {
+      const parts = detail.map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg)
+        }
+        return String(item)
+      })
+      const joined = parts.filter(Boolean).join("; ")
+      if (joined) return joined
+    }
+  }
+  return "Approval failed. Please try again."
+}
+
 function SummaryTab({
   summary,
   loading,
   awaitingPipeline,
   downloading,
   onDownloadPdf,
+  documentId,
+  onApproved,
 }: {
   summary: SummaryDto | null | undefined
   loading: boolean
   awaitingPipeline: boolean
   downloading: boolean
   onDownloadPdf: () => void
+  documentId: string
+  onApproved: () => void
 }) {
+  const { styles, theme } = useDetailTheme()
+  const [approving, setApproving] = React.useState(false)
+  const [approveError, setApproveError] = React.useState<string | null>(null)
+  const [approveSuccess, setApproveSuccess] = React.useState(false)
+
+  const handleApprove = React.useCallback(async () => {
+    setApproving(true)
+    setApproveError(null)
+    setApproveSuccess(false)
+    try {
+      await approveDocument(documentId)
+      setApproveSuccess(true)
+      onApproved()
+    } catch (e: unknown) {
+      setApproveError(approveFailureDetail(e))
+    } finally {
+      setApproving(false)
+    }
+  }, [documentId, onApproved])
+
   if (awaitingPipeline && summary === undefined) {
     return (
       <GlassCard intensity={44} contentStyle={styles.emptyTab}>
@@ -824,8 +1465,9 @@ function SummaryTab({
     )
   }
 
-  const sumBadge = statusBadgeStyle(summary.status)
+  const sumBadge = statusBadgeStyle(summary.status, theme)
   const sections = parseSummaryMarkdown(summary.summary_text)
+  const summaryStatus = summary.status.toLowerCase()
 
   return (
     <GlassCard intensity={44} contentStyle={styles.summaryInner}>
@@ -858,9 +1500,12 @@ function SummaryTab({
       ))}
 
       <Pressable
-        style={[styles.downloadBtn, downloading && styles.downloadBtnBusy]}
+        style={[
+          styles.downloadBtn,
+          (downloading || approving) && styles.downloadBtnBusy,
+        ]}
         onPress={onDownloadPdf}
-        disabled={downloading}
+        disabled={downloading || approving}
       >
         {downloading ? (
           <ActivityIndicator color={theme.orangeDark} />
@@ -868,11 +1513,44 @@ function SummaryTab({
           <Text style={styles.downloadBtnText}>Download PDF</Text>
         )}
       </Pressable>
+
+      {approveSuccess ? (
+        <View style={styles.approveOkBanner}>
+          <Text style={styles.approveOkText}>
+            Document approved successfully
+          </Text>
+        </View>
+      ) : null}
+
+      {summaryStatus === "generated" && approveError ? (
+        <View style={styles.approveErrBanner}>
+          <Text style={styles.approveErrText}>{approveError}</Text>
+        </View>
+      ) : null}
+
+      {summaryStatus === "approved" ? (
+        <View style={styles.approvedBadge}>
+          <Text style={styles.approvedBadgeText}>Approved</Text>
+        </View>
+      ) : summaryStatus === "generated" ? (
+        <Pressable
+          style={[styles.approveBtn, approving && styles.downloadBtnBusy]}
+          onPress={() => void handleApprove()}
+          disabled={approving}
+        >
+          {approving ? (
+            <ActivityIndicator color={theme.white} />
+          ) : (
+            <Text style={styles.approveBtnText}>Approve Document</Text>
+          )}
+        </Pressable>
+      ) : null}
     </GlassCard>
   )
 }
 
-const styles = StyleSheet.create({
+function createDetailStyles(theme: ThemeTokens) {
+  return StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: "transparent",
@@ -1135,8 +1813,121 @@ const styles = StyleSheet.create({
   structuredWrap: {
     gap: 16,
   },
-  confirmChipRow: {
+  structChipBar: {
+    gap: 12,
     marginBottom: 4,
+  },
+  structSaveErrBanner: {
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: theme.errorBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(190,18,60,0.25)",
+  },
+  structSaveErrText: {
+    color: theme.error,
+    fontWeight: "600",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  structuredInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.glassStroke,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: theme.navy,
+    backgroundColor: theme.glassFill,
+  },
+  confirmChipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  confirmChipActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+    marginLeft: "auto",
+  },
+  structEditBtn: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.orange,
+  },
+  structEditActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  structCancelBtn: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.muted,
+  },
+  structSaveBtn: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.orange,
+    minWidth: 42,
+    textAlign: "center",
+  },
+  structActionMuted: {
+    opacity: 0.45,
+  },
+  diagnosisEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  diagnosisEditInput: {
+    flex: 1,
+  },
+  diagnosisRemoveBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  diagnosisRemoveGlyph: {
+    color: theme.error,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  structAddLink: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.orange,
+    marginTop: 4,
+  },
+  medEditCard: {
+    position: "relative",
+    marginBottom: 20,
+    paddingTop: 4,
+    paddingRight: 28,
+  },
+  medRemoveBtn: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    padding: 8,
+    zIndex: 2,
+  },
+  medRemoveGlyph: {
+    color: theme.error,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  medEditTwoCol: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  medEditCol: {
+    flex: 1,
+    gap: 6,
   },
   confirmChip: {
     alignSelf: "flex-start",
@@ -1346,4 +2137,74 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: theme.orangeDark,
   },
+  approvedBadge: {
+    alignSelf: "center",
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderColor: "#22C55E",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  approvedBadgeText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.4,
+  },
+  approveOkBanner: {
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "rgba(34,197,94,0.1)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(34,197,94,0.35)",
+  },
+  approveOkText: {
+    color: "#15803D",
+    fontWeight: "600",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  approveErrBanner: {
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: theme.errorBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(190,18,60,0.25)",
+  },
+  approveErrText: {
+    color: theme.error,
+    fontWeight: "600",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  approveBtn: {
+    marginTop: 12,
+    paddingVertical: 15,
+    borderRadius: 16,
+    backgroundColor: theme.orange,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  approveBtnText: {
+    color: theme.white,
+    fontSize: 16,
+    fontWeight: "700",
+  },
 })
+}
+
+type DetailThemeBundle = {
+  styles: ReturnType<typeof createDetailStyles>
+  theme: ThemeTokens
+}
+
+const DetailThemeContext = React.createContext<DetailThemeBundle | null>(null)
+
+function useDetailTheme() {
+  const ctx = React.useContext(DetailThemeContext)
+  if (!ctx) {
+    throw new Error("useDetailTheme must be used within DocumentDetailScreen")
+  }
+  return ctx
+}

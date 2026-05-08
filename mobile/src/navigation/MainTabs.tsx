@@ -2,12 +2,13 @@ import { Ionicons } from "@expo/vector-icons"
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
 import * as React from "react"
 
+import { useAuth } from "../contexts/AuthContext"
+import { useTheme } from "../contexts/ThemeContext"
+import { AdminScreen } from "../screens/AdminScreen"
 import { DashboardScreen } from "../screens/DashboardScreen"
 import { DocumentsScreen } from "../screens/DocumentsScreen"
 import { ProfileScreen } from "../screens/ProfileScreen"
 import { UploadScreen } from "../screens/UploadScreen"
-import { theme } from "../theme"
-import { useAuth } from "../contexts/AuthContext"
 import { GlassTabBar } from "./GlassTabBar"
 import type { MainTabParamList } from "./types"
 
@@ -15,6 +16,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>()
 
 export function MainTabsNavigator() {
   const { user } = useAuth()
+  const { theme } = useTheme()
   const hideUpload =
     user?.role === "admin" || user?.role === "super_admin"
 
@@ -79,7 +81,23 @@ export function MainTabsNavigator() {
             ),
           }}
         />
-      ) : null}
+      ) : (
+        <Tab.Screen
+          name="Admin"
+          component={AdminScreen}
+          options={{
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons
+                name={
+                  focused ? "shield-checkmark" : "shield-checkmark-outline"
+                }
+                color={color}
+                size={focused ? 24 : 22}
+              />
+            ),
+          }}
+        />
+      )}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}

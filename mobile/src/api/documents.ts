@@ -1,10 +1,11 @@
 import type { AxiosProgressEvent } from "axios"
 
-import { api } from "./client"
+import { api, getMemoryAccessToken } from "./client"
 
 export interface DocumentDto {
   id: string
   filename: string
+  patient_name?: string | null
   status: string
   pages: number | null
   ocr_confidence: number | null
@@ -95,14 +96,63 @@ export interface SummaryDto {
   created_at: string
 }
 
+export interface DocumentsStats {
+  total: number
+  pending: number
+  processing: number
+  approved: number
+}
+
+export async function fetchStats(): Promise<DocumentsStats> {
+  const token = getMemoryAccessToken()
+  const { data } = await api.get<DocumentsStats>("/documents/stats", {
+    ...(token
+      ? { headers: { Authorization: `Bearer ${token}` } }
+      : {}),
+  })
+  return data
+}
+
+export async function approveDocument(documentId: string): Promise<void> {
+  const token = getMemoryAccessToken()
+  await api.post(
+    `/documents/${documentId}/approve`,
+    undefined,
+    {
+      ...(token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {}),
+    },
+  )
+}
+
+export async function patchStructuredData(
+  documentId: string,
+  body: Partial<StructuredDataDto>,
+): Promise<StructuredDataDto> {
+  const token = getMemoryAccessToken()
+  const { data } = await api.patch<StructuredDataDto>(
+    `/documents/${documentId}/structured-data`,
+    body,
+    {
+      ...(token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {}),
+    },
+  )
+  return data
+}
+
 export async function fetchDocuments(params: {
   page?: number
   perPage?: number
+  status?: string
 }): Promise<DocumentListResponse> {
   const { data } = await api.get<DocumentListResponse>("/documents", {
     params: {
       page: params.page ?? 1,
       per_page: params.perPage ?? 20,
+      ...(params.status ? { status: params.status } : {}),
     },
   })
   return data

@@ -1,24 +1,23 @@
 import { NavigationContainer } from "@react-navigation/native"
 import { createNativeStackNavigator } from "@react-navigation/native-stack"
+import * as React from "react"
 import { ActivityIndicator, StyleSheet, View } from "react-native"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 
 import { AppBackground } from "../components/AppBackground"
-import { theme } from "../theme"
 import { useAuth } from "../contexts/AuthContext"
+import { useTheme } from "../contexts/ThemeContext"
 import { LoginScreen } from "../screens/LoginScreen"
 
+import { navigationRef } from "./navigationRef"
 import { MainStackNavigator } from "./MainStack"
-
-export type RootStackParamList = {
-  Login: undefined
-  Main: undefined
-}
+import type { RootStackParamList } from "./types"
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export function RootNavigator() {
   const { user, isLoading } = useAuth()
+  const { theme } = useTheme()
 
   if (isLoading) {
     return (
@@ -32,7 +31,7 @@ export function RootNavigator() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           key={user ? "signed-in" : "signed-out"}
           screenOptions={{ headerShown: false }}
