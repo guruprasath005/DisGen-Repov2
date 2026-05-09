@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     hospital_name: str = "Hospital"
     hospital_id: str = "hospital-001"
 
+    # ── API Docs ──────────────────────────────────────────────────────────────
+    # Disabled by default. Set DOCS_ENABLED=true + strong credentials in staging.
+    # Never enable in production — /docs exposes the full API surface.
+    docs_enabled: bool = False
+    docs_username: str = "disgen-dev"
+    docs_password: str = "changeme-docs"
+
     # ── GlitchTip / Sentry error tracking ────────────────────────────────────
     glitchtip_dsn: str = ""
 

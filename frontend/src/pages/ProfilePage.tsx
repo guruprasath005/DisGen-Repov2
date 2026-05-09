@@ -28,16 +28,19 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-8 pb-12">
-      <div>
+      <div className="space-y-1">
+        <p className="font-medium text-[11px] text-primary uppercase tracking-[0.14em]">
+          Workspace
+        </p>
         <h1 className="font-semibold text-2xl text-foreground tracking-tight">
           Profile
         </h1>
-        <p className="mt-1 text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm leading-relaxed">
           Your account details for this hospital workspace.
         </p>
       </div>
 
-      <Card className="border-white/60 bg-white/65 shadow-md shadow-orange-950/5 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/55">
+      <Card className="border-white/58 bg-white/58 backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/46">
         <CardContent className="flex flex-col items-center gap-6 p-8 text-center">
           <div
             className="flex size-20 items-center justify-center rounded-full border-2 border-primary/30 bg-primary/10 font-semibold text-2xl text-primary tabular-nums shadow-inner"
@@ -66,13 +69,13 @@ export default function ProfilePage() {
               <span className="text-foreground">{user.hospital_id}</span>
             </p>
           </div>
-          <p className="max-w-sm rounded-xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-amber-950 text-sm leading-relaxed shadow-sm">
+          <p className="max-w-sm rounded-xl border border-amber-200/75 bg-gradient-to-br from-amber-50/98 to-amber-50/85 px-4 py-3 text-amber-950 text-sm leading-relaxed shadow-[var(--shadow-xs)]">
             To update your profile details, contact your Super Admin.
           </p>
           <Button
             type="button"
             variant="destructive"
-            className="min-w-[200px] border border-destructive/30"
+            className="min-w-[200px] rounded-xl border border-destructive/35 shadow-[var(--shadow-xs)]"
             onClick={() => {
               void logout()
             }}

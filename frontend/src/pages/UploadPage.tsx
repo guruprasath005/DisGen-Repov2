@@ -127,27 +127,30 @@ function UploadInner() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-12">
       <div>
+        <p className="font-medium text-[11px] text-primary uppercase tracking-[0.14em]">
+          Clinical intake
+        </p>
         <h1 className="font-semibold text-2xl text-foreground tracking-tight">
           Upload discharge record
         </h1>
-        <p className="mt-1 text-muted-foreground text-sm">
+        <p className="mt-2 text-pretty text-muted-foreground text-sm leading-relaxed">
           Secure intake with consent capture. Files are scanned server-side and
           encrypted at rest.
         </p>
       </div>
 
       <form className="space-y-8" onSubmit={(e) => void handleSubmit(e)}>
-        <section className="rounded-2xl border border-white/60 bg-white/65 p-6 shadow-md shadow-orange-950/5 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/55">
+        <section className="glass-panel p-6 sm:p-7">
           <Label className="font-medium text-foreground text-sm">
             Clinical document
           </Label>
           <div
             role="presentation"
             className={cn(
-              "mt-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 transition-colors",
+              "mt-3 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 transition-[border-color,background-color,box-shadow] duration-200",
               dragActive
-                ? "border-primary/50 bg-primary/8"
-                : "border-border/70 bg-white/40 hover:border-primary/35 hover:bg-primary/[0.04]",
+                ? "border-primary/55 bg-primary/[0.07] shadow-[0_0_0_3px_rgb(249_115_22_/_0.12)]"
+                : "border-border/65 bg-white/35 hover:border-primary/38 hover:bg-primary/[0.035] hover:shadow-[var(--shadow-xs)]",
             )}
             onDragEnter={(e) => {
               e.preventDefault()
@@ -180,7 +183,7 @@ function UploadInner() {
           </div>
 
           {file && (
-            <div className="mt-4 flex items-center justify-between rounded-lg border border-primary/15 bg-primary/5 px-4 py-3">
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-primary/18 bg-primary/[0.06] px-4 py-3 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.6)]">
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground text-sm">
                   {file.name}
@@ -215,7 +218,7 @@ function UploadInner() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-white/60 bg-white/65 p-6 shadow-md shadow-orange-950/5 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/55">
+        <section className="glass-panel p-6 sm:p-7">
           <h2 className="font-semibold text-foreground text-sm tracking-tight">
             Patient & consent
           </h2>
@@ -237,8 +240,8 @@ function UploadInner() {
               <select
                 id="consent-method"
                 className={cn(
-                  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none",
-                  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "h-9 w-full rounded-xl border border-input/90 bg-background/90 px-3 text-sm shadow-[inset_0_1px_2px_rgb(15_23_42_/_0.03)] outline-none transition-[border-color,box-shadow]",
+                  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/38",
                 )}
                 value={consentMethod}
                 onChange={(e) =>
@@ -262,7 +265,7 @@ function UploadInner() {
               />
             </div>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/60 bg-white/45 px-4 py-3 sm:col-span-2">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/65 bg-white/40 px-4 py-3.5 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.65)] sm:col-span-2">
               <input
                 type="checkbox"
                 checked={consentGiven}
@@ -283,8 +286,13 @@ function UploadInner() {
           </div>
         </section>
 
-        <div className="flex flex-wrap justify-end gap-3">
-          <Button type="submit" disabled={!canSubmit || uploading}>
+        <div className="flex flex-wrap justify-end gap-3 pt-1">
+          <Button
+            type="submit"
+            size="lg"
+            className="h-10 min-w-[10rem] rounded-xl px-6 shadow-[var(--shadow-sm)] shadow-primary/18"
+            disabled={!canSubmit || uploading}
+          >
             {uploading ? "Uploading…" : "Submit upload"}
           </Button>
         </div>

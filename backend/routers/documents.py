@@ -58,6 +58,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user, require_role
+from middleware.rate_limit import RateLimiter
 from compliance.abha import abha_error_message, validate_abha_id
 from compliance.consent import validate_consent_payload
 from metrics import disgen_document_status_total, disgen_upload_total
@@ -600,6 +601,7 @@ async def get_document(
 @router.get("/{document_id}/status", response_model=StatusResponse)
 async def get_document_status(
     document_id: uuid.UUID,
+    _rl: None = RateLimiter("status_poll", limit=60),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> StatusResponse:
@@ -851,6 +853,7 @@ async def trigger_generation(
     document_id: uuid.UUID,
     body: GenerateRequest,
     request: Request,
+    _rl: None = RateLimiter("generate", limit=10),
     user: User = Depends(require_role("doctor")),
     db: AsyncSession = Depends(get_db),
 ) -> GenerateResponse:
@@ -933,6 +936,7 @@ async def trigger_generation(
 async def get_latest_summary(
     document_id: uuid.UUID,
     scheme_id: str | None = Query(default=None),
+    _rl: None = RateLimiter("summary_fetch", limit=30),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SummaryResponse:
@@ -1094,6 +1098,7 @@ async def download_latest_summary_pdf(
     document_id: uuid.UUID,
     request: Request,
     scheme_id: str | None = Query(default=None),
+    _rl: None = RateLimiter("pdf_download", limit=10),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
@@ -1230,6 +1235,7 @@ async def approve_latest_summary(
     document_id: uuid.UUID,
     request: Request,
     scheme_id: str | None = Query(default=None),
+    _rl: None = RateLimiter("approve", limit=20),
     user: User = Depends(require_role("doctor")),
     db: AsyncSession = Depends(get_db),
 ) -> SummaryResponse:

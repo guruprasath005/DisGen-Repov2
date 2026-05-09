@@ -71,11 +71,11 @@ export default function LoginPage() {
     return (
       <div className="relative flex min-h-svh flex-col items-center justify-center gap-4 overflow-hidden bg-background">
         <div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/90 via-background to-zinc-100"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/78 via-background to-sky-50/34"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-0 bg-clinical-mesh opacity-80"
+          className="pointer-events-none absolute inset-0 bg-clinical-mesh opacity-[0.86]"
           aria-hidden
         />
         <Loader2
@@ -92,29 +92,32 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-svh overflow-hidden bg-background">
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/85 via-background to-zinc-100"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/74 via-background to-sky-50/32"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-clinical-mesh opacity-90"
+        className="pointer-events-none absolute inset-0 bg-clinical-mesh opacity-[0.88]"
         aria-hidden
       />
 
       <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-4 py-12">
         <div className="mb-10 flex flex-col items-center text-center">
-          <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-md)] shadow-primary/25 ring-1 ring-white/30">
-            <ShieldCheck className="size-8" aria-hidden />
+          <div className="mb-5 flex size-[3.75rem] items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-md)] shadow-primary/28 ring-[3px] ring-white/35">
+            <ShieldCheck className="size-[2.1rem]" strokeWidth={2.25} aria-hidden />
           </div>
+          <p className="mb-1 font-medium text-[11px] text-primary uppercase tracking-[0.14em]">
+            Hospital workspace
+          </p>
           <h1 className="font-semibold tracking-tight text-foreground text-3xl sm:text-4xl">
             DisGen
           </h1>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground sm:text-base">
-            Clinical discharge intelligence — hospital-grade security and audit
-            trails.
+          <p className="mt-2 max-w-md text-pretty text-muted-foreground text-sm sm:text-base leading-relaxed">
+            Clinical discharge intelligence — enterprise security, full audit
+            trails, and PHI-safe workflows.
           </p>
         </div>
 
-        <Card className="w-full max-w-md border-white/55 bg-white/72 shadow-[var(--shadow-card)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/62">
+        <Card className="w-full max-w-md border-white/58 bg-white/64 backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/52">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-xl font-semibold tracking-tight">
               Staff sign in
@@ -162,7 +165,7 @@ export default function LoginPage() {
               </div>
               <Button
                 type="submit"
-                className="w-full gap-2 shadow-md shadow-primary/20"
+                className="h-10 w-full gap-2 rounded-xl text-[15px] shadow-[var(--shadow-sm)] shadow-primary/22 transition-[box-shadow,transform] hover:shadow-[var(--shadow-md)] hover:shadow-primary/28"
                 disabled={form.formState.isSubmitting}
               >
                 {form.formState.isSubmitting ? (
@@ -177,7 +180,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="mt-10 max-w-lg text-center text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-10 max-w-lg text-center text-[11px] text-muted-foreground/92 leading-relaxed">
           Protected health information (PHI) is processed only on approved
           hospital infrastructure. Unauthorized access is prohibited and subject
           to audit.

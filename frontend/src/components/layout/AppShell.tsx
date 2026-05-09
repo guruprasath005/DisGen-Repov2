@@ -12,18 +12,18 @@ export function AppShell() {
   return (
     <div className="relative flex min-h-svh w-full bg-background">
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/75 via-background to-zinc-100/95"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/72 via-background to-sky-50/36"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-clinical-mesh opacity-[0.85]"
+        className="pointer-events-none absolute inset-0 bg-clinical-mesh opacity-[0.88]"
         aria-hidden
       />
       <Sidebar />
-      <div className="relative flex min-h-svh min-w-0 flex-1 flex-col">
+      <div className="relative flex min-h-svh min-w-0 flex-1 flex-col shadow-[inset_1px_0_0_rgb(15_23_42_/_0.04)]">
         <Topbar />
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 sm:py-9 lg:px-10">
+        <main className="scrollbar-clinical flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
             <Outlet />
           </div>
         </main>

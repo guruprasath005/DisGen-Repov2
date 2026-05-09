@@ -72,10 +72,10 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const linkBase =
-  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 outline-none transition-all hover:bg-primary/14 hover:text-primary hover:shadow-[0_1px_12px_-4px_rgba(249,115,22,0.35)] focus-visible:bg-primary/14 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-primary/30"
+  "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground/80 outline-none transition-all duration-200 hover:bg-primary/14 hover:text-primary hover:shadow-[0_1px_14px_-3px_rgba(249,115,22,0.38)] focus-visible:bg-primary/14 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-primary/28"
 
 const linkActive =
-  "bg-primary/[0.11] text-primary shadow-[var(--shadow-xs)] ring-1 ring-primary/22 [&_svg]:text-primary"
+  "bg-primary/[0.12] text-primary shadow-[var(--shadow-sm)] ring-1 ring-primary/25 [&_svg]:text-primary"
 
 export function Sidebar() {
   const { user } = useAuth()
@@ -86,8 +86,8 @@ export function Sidebar() {
   )
 
   return (
-    <aside className="relative z-10 flex w-[15.5rem] shrink-0 flex-col border-border/70 border-r bg-white/58 shadow-[4px_0_32px_-16px_rgb(15_23_42_/_0.08),inset_-1px_0_0_rgb(255_255_255_/_0.65)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/46">
-      <div className="border-border/35 border-b px-4 py-5">
+    <aside className="relative z-10 flex w-[15.5rem] shrink-0 flex-col border-border/55 border-r bg-white/60 shadow-[4px_0_36px_-18px_rgb(15_23_42_/_0.1),inset_-1px_0_0_rgb(255_255_255_/_0.7)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/48">
+      <div className="border-border/30 border-b bg-gradient-to-b from-white/50 to-transparent px-4 py-5">
         <NavLink
           to="/dashboard"
           className="flex items-center gap-3 outline-none transition-opacity hover:opacity-90"
@@ -126,7 +126,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-border/35 border-t px-3 py-3 text-[11px] text-muted-foreground/92 tracking-wide leading-relaxed">
+      <div className="border-border/30 border-t bg-gradient-to-t from-muted/15 to-transparent px-3 py-3 text-[11px] text-muted-foreground/90 tracking-wide leading-relaxed">
         PHI-handling environment. Activity may be audited.
       </div>
     </aside>

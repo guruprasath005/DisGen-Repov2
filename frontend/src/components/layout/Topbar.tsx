@@ -22,7 +22,7 @@ export function Topbar() {
   const { user, logout } = useAuth()
 
   return (
-    <header className="relative z-10 flex h-[3.65rem] shrink-0 items-center justify-between gap-6 border-border/55 border-b bg-white/52 px-5 shadow-[var(--shadow-xs)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/42">
+    <header className="relative z-10 flex h-[3.65rem] shrink-0 items-center justify-between gap-6 border-border/45 border-b bg-white/55 px-5 shadow-[var(--shadow-xs)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/44">
       {user ? (
         <NavLink
           to="/profile"
@@ -33,7 +33,7 @@ export function Topbar() {
           )}
         >
           <div
-        className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/22 bg-gradient-to-br from-primary/14 to-primary/8 font-semibold text-primary text-xs shadow-[inset_0_1px_1px_rgb(255_255_255_/_0.55)] tabular-nums sm:size-11 sm:text-sm"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/22 bg-gradient-to-br from-primary/14 to-primary/8 font-semibold text-primary text-xs shadow-[inset_0_1px_1px_rgb(255_255_255_/_0.55)] tabular-nums sm:size-11 sm:text-sm"
             aria-hidden
           >
             {initials(user.full_name)}
@@ -64,7 +64,7 @@ export function Topbar() {
         type="button"
         variant="outline"
         size="sm"
-        className="ml-6 shrink-0 gap-2 border-primary/25 bg-white/70 shadow-sm transition-colors hover:border-primary/45 hover:bg-primary/12 hover:text-primary sm:ml-10"
+        className="ml-6 shrink-0 gap-2 rounded-xl border-primary/28 bg-white/75 shadow-[var(--shadow-xs)] transition-colors hover:border-primary/42 hover:bg-primary/11 hover:text-primary sm:ml-10"
         onClick={() => void logout()}
       >
         <LogOut className="size-3.5" aria-hidden />
