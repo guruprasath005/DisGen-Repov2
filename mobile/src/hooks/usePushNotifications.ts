@@ -1,25 +1,14 @@
 import Constants from "expo-constants"
-import * as Notifications from "expo-notifications"
 import * as React from "react"
 
 import { registerPushToken } from "../api/users"
 import { navigate } from "../navigation/navigationRef"
 
-// Push notifications are not supported in Expo Go since SDK 53.
-// Only register and listen when running as a standalone/dev-client build.
-const IS_EXPO_GO = Constants.appOwnership === "expo"
-
-if (!IS_EXPO_GO) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  })
-}
+// In Expo Go SDK 53+, importing expo-notifications at module load time throws.
+// Guard with a dynamic import so the module never loads in Expo Go.
+const IS_EXPO_GO =
+  Constants.executionEnvironment === "storeClient" ||
+  Constants.appOwnership === "expo"
 
 function openNotificationDocument(data: Record<string, unknown> | undefined) {
   const documentId =
@@ -38,44 +27,53 @@ export function usePushNotifications(): void {
     if (IS_EXPO_GO) return
 
     let cancelled = false
-    let responseSub: { remove: () => void } | undefined
+    let removeSub: (() => void) | undefined
 
-    async function registerToken() {
-      const { status } = await Notifications.requestPermissionsAsync()
-      if (cancelled || status !== "granted") return
-
+    async function setup() {
       try {
+        const Notifications = await import("expo-notifications")
+
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+            shouldShowBanner: true,
+            shouldShowList: true,
+          }),
+        })
+
+        const { status } = await Notifications.requestPermissionsAsync()
+        if (cancelled || status !== "granted") return
+
         const tokenData = await Notifications.getExpoPushTokenAsync()
-        const token = tokenData.data
-        void registerPushToken(token).catch(() => {})
+        void registerPushToken(tokenData.data).catch(() => {})
+
+        const lastResponse = await Notifications.getLastNotificationResponseAsync()
+        if (lastResponse?.notification?.request?.content?.data) {
+          openNotificationDocument(
+            lastResponse.notification.request.content.data as Record<string, unknown>
+          )
+        }
+
+        const sub = Notifications.addNotificationResponseReceivedListener(
+          (response) => {
+            openNotificationDocument(
+              response.notification.request.content.data as Record<string, unknown>
+            )
+          }
+        )
+        removeSub = () => sub.remove()
       } catch {
-        /* push token unavailable — non-fatal */
+        /* push notifications unavailable — non-fatal */
       }
     }
 
-    void registerToken()
-
-    void Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (!response?.notification?.request?.content?.data) return
-      const data = response.notification.request.content.data as Record<
-        string,
-        unknown
-      >
-      openNotificationDocument(data)
-    })
-
-    responseSub = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data = response.notification.request.content.data as
-          | Record<string, unknown>
-          | undefined
-        openNotificationDocument(data)
-      },
-    )
+    void setup()
 
     return () => {
       cancelled = true
-      responseSub?.remove()
+      removeSub?.()
     }
   }, [])
 }
