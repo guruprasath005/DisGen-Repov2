@@ -13,7 +13,9 @@ from logging_config import PHIScrubFilter, setup_logging
 from middleware.csrf import CSRFMiddleware
 from middleware.idempotency import IdempotencyMiddleware
 from middleware.rate_limit import GlobalRateLimitMiddleware
-from middleware.security_headers import SecurityHeadersMiddleware
+# SecurityHeadersMiddleware is intentionally omitted — nginx already injects
+# HSTS, CSP, X-Frame-Options etc. Adding them again at the app layer would
+# duplicate headers. The middleware file is kept for deployments without nginx.
 from auth.router import router as auth_router
 from routers.admin import router as admin_router
 from routers.documents import router as documents_router
@@ -124,7 +126,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token", "Idempotency-Key"],
 )
-app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(IdempotencyMiddleware)
