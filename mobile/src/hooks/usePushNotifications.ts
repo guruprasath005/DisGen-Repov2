@@ -4,11 +4,13 @@ import * as React from "react"
 import { registerPushToken } from "../api/users"
 import { navigate } from "../navigation/navigationRef"
 
-// expo-notifications remote push APIs were removed from Expo Go in SDK 53.
-// The module throws at load time in Expo Go — use dynamic import so it never
-// loads. ExecutionEnvironment.StoreClient is the correct SDK 53+ Expo Go check.
-const IS_EXPO_GO =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+// Only enable push in standalone/bare builds where expo-notifications works.
+// Expo Go SDK 53+ removed Android push support — the module throws on load.
+// Opt-in (whitelist) is safer than opt-out: if executionEnvironment is
+// anything other than a known good value, we skip push silently.
+const PUSH_SUPPORTED =
+  Constants.executionEnvironment === ExecutionEnvironment.Standalone ||
+  Constants.executionEnvironment === ExecutionEnvironment.Bare
 
 function openNotificationDocument(data: Record<string, unknown> | undefined) {
   const documentId =
@@ -24,7 +26,7 @@ function openNotificationDocument(data: Record<string, unknown> | undefined) {
 
 export function usePushNotifications(): void {
   React.useEffect(() => {
-    if (IS_EXPO_GO) return
+    if (!PUSH_SUPPORTED) return
 
     let cancelled = false
     let removeSub: (() => void) | undefined
@@ -72,7 +74,7 @@ export function usePushNotifications(): void {
         )
         removeSub = () => sub.remove()
       } catch {
-        /* push notifications unavailable in this environment — non-fatal */
+        /* push notifications unavailable — non-fatal */
       }
     }
 
