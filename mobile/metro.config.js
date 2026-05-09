@@ -3,16 +3,17 @@ const path = require("path")
 
 const config = getDefaultConfig(__dirname)
 
-// In development (Expo Go), redirect expo-notifications to a no-op stub.
+// In development (Expo Go), forcibly redirect expo-notifications to a no-op stub.
+// extraNodeModules doesn't override installed packages — resolveRequest does.
 // expo-notifications throws on Android Expo Go SDK 53+ during native module init.
-// Production builds (EAS / expo run:android) use the real module via node_modules.
 if (process.env.NODE_ENV !== "production") {
-  config.resolver.extraNodeModules = {
-    ...config.resolver.extraNodeModules,
-    "expo-notifications": path.resolve(
-      __dirname,
-      "src/stubs/expo-notifications-stub.js",
-    ),
+  const STUB = path.resolve(__dirname, "src/stubs/expo-notifications-stub.js")
+
+  config.resolver.resolveRequest = (context, moduleName, platform) => {
+    if (moduleName === "expo-notifications") {
+      return { filePath: STUB, type: "sourceFile" }
+    }
+    return context.resolveRequest(context, moduleName, platform)
   }
 }
 
