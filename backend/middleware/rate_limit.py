@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-import aioredis
+import redis.asyncio as aioredis
 
 from auth.dependencies import get_current_user
 from config import settings

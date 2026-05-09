@@ -34,7 +34,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
 
         # Remove server fingerprint
-        response.headers.pop("server", None)
-        response.headers.pop("x-powered-by", None)
+        for h in ("server", "x-powered-by"):
+            if h in response.headers:
+                del response.headers[h]
 
         return response
