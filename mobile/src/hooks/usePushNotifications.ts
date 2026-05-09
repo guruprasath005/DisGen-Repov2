@@ -1,16 +1,13 @@
-import Constants, { ExecutionEnvironment } from "expo-constants"
+import Constants from "expo-constants"
 import * as React from "react"
 
 import { registerPushToken } from "../api/users"
 import { navigate } from "../navigation/navigationRef"
 
-// Only enable push in standalone/bare builds where expo-notifications works.
-// Expo Go SDK 53+ removed Android push support — the module throws on load.
-// Opt-in (whitelist) is safer than opt-out: if executionEnvironment is
-// anything other than a known good value, we skip push silently.
-const PUSH_SUPPORTED =
-  Constants.executionEnvironment === ExecutionEnvironment.Standalone ||
-  Constants.executionEnvironment === ExecutionEnvironment.Bare
+// Only enable push in standalone/bare builds (string comparison — no enum import
+// to avoid potential Android module resolution issues).
+const _env = Constants.executionEnvironment
+const PUSH_SUPPORTED = _env === "standalone" || _env === "bare"
 
 function openNotificationDocument(data: Record<string, unknown> | undefined) {
   const documentId =
