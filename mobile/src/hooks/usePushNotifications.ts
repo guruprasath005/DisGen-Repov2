@@ -1,14 +1,14 @@
-import Constants from "expo-constants"
+import Constants, { ExecutionEnvironment } from "expo-constants"
 import * as React from "react"
 
 import { registerPushToken } from "../api/users"
 import { navigate } from "../navigation/navigationRef"
 
-// In Expo Go SDK 53+, importing expo-notifications at module load time throws.
-// Guard with a dynamic import so the module never loads in Expo Go.
+// expo-notifications remote push APIs were removed from Expo Go in SDK 53.
+// The module throws at load time in Expo Go — use dynamic import so it never
+// loads. ExecutionEnvironment.StoreClient is the correct SDK 53+ Expo Go check.
 const IS_EXPO_GO =
-  Constants.executionEnvironment === "storeClient" ||
-  Constants.appOwnership === "expo"
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient
 
 function openNotificationDocument(data: Record<string, unknown> | undefined) {
   const documentId =
@@ -49,23 +49,30 @@ export function usePushNotifications(): void {
         const tokenData = await Notifications.getExpoPushTokenAsync()
         void registerPushToken(tokenData.data).catch(() => {})
 
-        const lastResponse = await Notifications.getLastNotificationResponseAsync()
+        const lastResponse =
+          await Notifications.getLastNotificationResponseAsync()
         if (lastResponse?.notification?.request?.content?.data) {
           openNotificationDocument(
-            lastResponse.notification.request.content.data as Record<string, unknown>
+            lastResponse.notification.request.content.data as Record<
+              string,
+              unknown
+            >,
           )
         }
 
         const sub = Notifications.addNotificationResponseReceivedListener(
           (response) => {
             openNotificationDocument(
-              response.notification.request.content.data as Record<string, unknown>
+              response.notification.request.content.data as Record<
+                string,
+                unknown
+              >,
             )
-          }
+          },
         )
         removeSub = () => sub.remove()
       } catch {
-        /* push notifications unavailable — non-fatal */
+        /* push notifications unavailable in this environment — non-fatal */
       }
     }
 
