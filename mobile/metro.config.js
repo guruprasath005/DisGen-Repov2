@@ -1,20 +1,11 @@
+// Default Expo Metro config.
+//
+// We previously redirected expo-notifications to a no-op stub here because
+// App.tsx statically imported it and crashed Expo Go SDK 53+. That root cause
+// is gone: push setup is now fully lazy and environment-gated in
+// usePushNotifications (it only `await import("expo-notifications")` in
+// standalone/bare builds). Expo Go never evaluates the native module, so no
+// resolver hack or stub is required.
 const { getDefaultConfig } = require("expo/metro-config")
-const path = require("path")
 
-const config = getDefaultConfig(__dirname)
-
-// In development (Expo Go), forcibly redirect expo-notifications to a no-op stub.
-// extraNodeModules doesn't override installed packages — resolveRequest does.
-// expo-notifications throws on Android Expo Go SDK 53+ during native module init.
-if (process.env.NODE_ENV !== "production") {
-  const STUB = path.resolve(__dirname, "src/stubs/expo-notifications-stub.js")
-
-  config.resolver.resolveRequest = (context, moduleName, platform) => {
-    if (moduleName === "expo-notifications") {
-      return { filePath: STUB, type: "sourceFile" }
-    }
-    return context.resolveRequest(context, moduleName, platform)
-  }
-}
-
-module.exports = config
+module.exports = getDefaultConfig(__dirname)

@@ -1,5 +1,6 @@
 import Constants from "expo-constants"
 import * as React from "react"
+import { Platform } from "react-native"
 
 import { registerPushToken } from "../api/users"
 import { navigate } from "../navigation/navigationRef"
@@ -31,6 +32,16 @@ export function usePushNotifications(): void {
     async function setup() {
       try {
         const Notifications = await import("expo-notifications")
+
+        // Android notification channel — created here (lazily, only in
+        // standalone/bare where PUSH_SUPPORTED is true) instead of eagerly
+        // in App.tsx, so Expo Go never evaluates the native module.
+        if (Platform.OS === "android") {
+          await Notifications.setNotificationChannelAsync("default", {
+            name: "default",
+            importance: Notifications.AndroidImportance.MAX,
+          })
+        }
 
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
