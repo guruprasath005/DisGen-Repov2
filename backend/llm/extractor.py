@@ -633,6 +633,72 @@ def _dedupe(items: list, keys: tuple[str, ...]) -> list:
     return out
 
 
+# ── UTF-8 mojibake normalizer (ISS-005) ───────────────────────────────────────
+#
+# Common Latin-1-as-UTF-8 (and OCR-character-confusion) glitches we observed
+# in Phase E. These come from the PDF -> Azure OCR step, NOT from extraction
+# logic, but they make extracted values look wrong (e.g. `Â°F`, `Ã 4`, units
+# like `/1L`, `/HL`, `/pL` that should be `/µL`). The fix is a post-extraction
+# canonical-character pass over every extracted string.
+#
+# Rule of thumb: only patterns that are *unambiguous* in this domain. We do
+# NOT touch single Latin letters or numerics; we only restore symbols.
+
+# Direct mojibake -> canonical character mappings.
+_MOJIBAKE_LITERALS: tuple[tuple[str, str], ...] = (
+    ("Â°", "°"),          # degree sign
+    ("Â±", "±"),          # plus-minus
+    ("Â¼", "¼"),
+    ("Â½", "½"),
+    ("Â¾", "¾"),
+    ("Â ", " "),          # NBSP rendered as Â + space
+    ("â€“", "–"),         # en dash
+    ("â€”", "—"),         # em dash
+    ("â€˜", "'"),
+    ("â€™", "'"),
+    ("â€œ", "\""),
+    ("â€", "\""),
+)
+
+# Context-aware unit-fixes: only inside lab-unit / dose contexts. We rewrite
+# digit-stripped variants (/1L /HL /pL /uL -> /µL ; mg/dL stays mg/dL).
+# Pattern: a leading "/" or "·" then a misencoded micro character then "L"
+# or "g/kg" etc.
+_UNIT_MICROLITER = re.compile(r"(?<=/)(?:1|H|p|u|I|Î¼|Î¼|µ)L\b")
+_DOSE_MICROGRAM = re.compile(r"(?<=[\s/])(?:1|H|p|u|Î¼)g(?=/kg|/h|\b)")
+
+# "Ã" followed by a digit (with or without whitespace) is almost always "×"
+# in clinical text — covers "5Ã6", "OD Ã 3", "haemodialysis Ã4", etc.
+_MULTIPLY = re.compile(r"Ã\s*(?=\d)")
+
+
+def _normalize_string(s: str) -> str:
+    """Apply all mojibake fixes to one string. Returns the cleaned text."""
+    if not s or not isinstance(s, str):
+        return s
+    out = s
+    for bad, good in _MOJIBAKE_LITERALS:
+        if bad in out:
+            out = out.replace(bad, good)
+    out = _UNIT_MICROLITER.sub("µL", out)
+    out = _DOSE_MICROGRAM.sub("µg", out)
+    out = _MULTIPLY.sub("× ", out)
+    # Collapse any double spaces our × insert may have produced
+    out = re.sub(r" {2,}", " ", out)
+    return out
+
+
+def _normalize_mojibake(data):
+    """Recursively normalize every string in a nested dict/list. Pure function."""
+    if isinstance(data, str):
+        return _normalize_string(data)
+    if isinstance(data, dict):
+        return {k: _normalize_mojibake(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_normalize_mojibake(v) for v in data]
+    return data
+
+
 def _merge_chunk_dicts(dicts: list[dict]) -> dict:
     """Deterministically merge per-chunk extraction dicts — no data dropped."""
     if not dicts:
@@ -784,6 +850,9 @@ def extract_structured(ocr_data: dict) -> StructuredData:
         logger.warning("All LLM chunks failed — using NLP/regex fallback only")
         merged = fallback_data
         source = "nlp_fallback" if fallback_data else "failed"
+
+    # ── ISS-005: normalize UTF-8 mojibake from the OCR pipeline ────────────────
+    merged = _normalize_mojibake(merged)
 
     # ── Coverage summary for the doctor-review UI ─────────────────────────────
     all_nums = {n for n, _ in pages}
