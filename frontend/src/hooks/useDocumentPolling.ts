@@ -2,25 +2,31 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 
 import { fetchDocumentStatus } from "@/api/documents"
-
-const POLL_INTERVAL_MS = 3000
-
-function isPollActive(status: string | undefined): boolean {
-  return status === "processing" || status === "generating"
-}
+import { useStateMachine } from "@/hooks/useStateMachine"
 
 /**
- * Polls GET /documents/:id/status every 3s while status is `processing` or `generating`.
- * Invalidates `["document", documentId]` after each poll so metadata stays fresh.
+ * Polls GET /documents/:id/status while the document is in any in-flight state
+ * (processing, ocr_complete, extracting, generating) — derived from the
+ * canonical backend contract, not a hard-coded list. Previously this only
+ * polled on `processing`/`generating`, so the UI silently froze for the entire
+ * OCR→extract→ready stretch. Invalidates `["document", documentId]` after each
+ * poll so metadata stays fresh, and stops once the document reaches a stable
+ * or failure state.
  */
 export function useDocumentPolling(
   documentId: string | undefined,
   seedStatus: string | undefined,
 ): { status: string | undefined; isPolling: boolean } {
   const queryClient = useQueryClient()
+  const sm = useStateMachine()
+
+  const inFlight = new Set(sm.in_flight)
+  const isActive = Boolean(
+    documentId && seedStatus && inFlight.has(seedStatus),
+  )
 
   useEffect(() => {
-    if (!documentId || !seedStatus || !isPollActive(seedStatus)) return
+    if (!documentId || !seedStatus || !inFlight.has(seedStatus)) return
 
     let cancelled = false
 
@@ -37,18 +43,14 @@ export function useDocumentPolling(
     }
 
     void tick()
-    const id = window.setInterval(tick, POLL_INTERVAL_MS)
+    const id = window.setInterval(tick, sm.poll_interval_ms)
 
     return () => {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [documentId, seedStatus, queryClient])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, seedStatus, queryClient, sm.poll_interval_ms])
 
-  return {
-    status: seedStatus,
-    isPolling: Boolean(
-      documentId && seedStatus && isPollActive(seedStatus),
-    ),
-  }
+  return { status: seedStatus, isPolling: isActive }
 }

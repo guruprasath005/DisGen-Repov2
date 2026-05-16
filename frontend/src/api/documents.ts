@@ -113,6 +113,44 @@ export interface DocumentStatusPayload {
   status: string
 }
 
+/** Canonical lifecycle contract — served by GET /documents/state-machine. */
+export interface StateMachineContract {
+  states: string[]
+  in_flight: string[]
+  failure: string[]
+  stable: string[]
+  editable_structured: string[]
+  generatable: string[]
+  reprocessable: string[]
+  reextractable: string[]
+  deprecated: string[]
+  poll_interval_ms: number
+}
+
+/**
+ * Offline fallback used only if /documents/state-machine is unreachable.
+ * Must stay in sync with backend/document_states.py IN_FLIGHT.
+ */
+export const DEFAULT_STATE_MACHINE: StateMachineContract = {
+  states: [],
+  in_flight: ["processing", "ocr_complete", "extracting", "generating"],
+  failure: ["failed", "ocr_failed", "validation_failed"],
+  stable: ["ready", "confirmed", "generated", "approved"],
+  editable_structured: ["ready", "confirmed"],
+  generatable: ["confirmed", "generated"],
+  reprocessable: ["ocr_failed", "failed"],
+  reextractable: ["ready", "ocr_complete", "failed"],
+  deprecated: ["validation_failed"],
+  poll_interval_ms: 3000,
+}
+
+export async function fetchStateMachine(): Promise<StateMachineContract> {
+  const { data } = await api.get<StateMachineContract>(
+    "/documents/state-machine",
+  )
+  return data
+}
+
 export interface UploadDocumentResponse {
   document_id: string
   status: string

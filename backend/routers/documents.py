@@ -66,6 +66,13 @@ from auth.service import client_ip as _client_ip
 from config import settings
 from crypto import decrypt, encrypt
 from database import get_db
+from document_states import (
+    DocumentState,
+    EDITABLE_STRUCTURED,
+    GENERATABLE,
+    can_generate,
+    state_machine_contract,
+)
 from llm.extractor import StructuredData
 from models.audit import AuditLog
 from models.compliance import ConsentRecord, HospitalConfig
@@ -91,8 +98,8 @@ _MAX_FILE_BYTES = 25 * 1024 * 1024  # 25 MB — nginx also enforces this
 
 _UPLOAD_RATE_LIMIT = 10  # uploads per minute per doctor
 
-# Statuses from which a doctor may edit structured data
-_EDITABLE_STATUSES: frozenset[str] = frozenset({"ready", "confirmed"})
+# Statuses from which a doctor may edit structured data — canonical source
+_EDITABLE_STATUSES: frozenset[str] = EDITABLE_STRUCTURED
 
 # Structured fields that doctors may update; system-assigned ICD-10 / metadata excluded
 _EDITABLE_FIELDS: frozenset[str] = frozenset(
@@ -581,6 +588,23 @@ async def get_stats(
     )
 
 
+# ── GET /documents/state-machine — MUST be declared before /{id} ──────────────
+
+
+@router.get("/state-machine", tags=["Documents"])
+async def get_state_machine(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    The canonical document lifecycle contract.
+
+    Web and mobile consume this instead of hard-coding their own status lists —
+    the divergence between the two was the root cause of the stale-UI bug.
+    Static, no PHI; authenticated to stay consistent with the rest of the API.
+    """
+    return state_machine_contract()
+
+
 # ── GET /documents/{id} ────────────────────────────────────────────────────────
 
 
@@ -606,8 +630,8 @@ async def get_document_status(
     db: AsyncSession = Depends(get_db),
 ) -> StatusResponse:
     """
-    Lightweight polling endpoint. Frontend polls every 3 s while status is
-    'processing' or 'extracting'. Returns only the current status string.
+    Lightweight polling endpoint. Clients poll every 3 s while the status is
+    in_flight (see GET /documents/state-machine). Returns only the status string.
     """
     doc = await _fetch_doc(document_id, user, db)
     return StatusResponse(document_id=str(doc.id), status=doc.status)
@@ -694,6 +718,20 @@ async def update_structured_data(
     if patch.excluded_fields is not None:
         report.excluded_fields = patch.excluded_fields
 
+    # Edit-after-confirm: any change to the clinical data invalidates a prior
+    # confirmation. Without this, generation would silently run on edited data
+    # that was never re-locked. Force the doctor back through /confirm.
+    reconfirm_required = False
+    if report.data_confirmed:
+        report.data_confirmed = False
+        report.confirmed_by = None
+        report.confirmed_at = None
+        reconfirm_required = True
+    if doc.status == DocumentState.CONFIRMED:
+        doc.status = DocumentState.READY
+        disgen_document_status_total.labels(status="ready").inc()
+        reconfirm_required = True
+
     db.add(
         AuditLog(
             user_id=user.id,
@@ -703,7 +741,11 @@ async def update_structured_data(
             document_id=document_id,
             ip_address=_client_ip(request),
             user_agent=request.headers.get("User-Agent"),
-            details={"fields_updated": updated_keys, "new_version": report.version},
+            details={
+                "fields_updated": updated_keys,
+                "new_version": report.version,
+                "reconfirm_required": reconfirm_required,
+            },
         )
     )
     await db.commit()
@@ -861,15 +903,14 @@ async def trigger_generation(
     Enqueue a discharge summary generation job.
 
     Doctor only — must own the document. Document must have its structured
-    data confirmed (`data_confirmed = true`). Allowed source statuses are
-    `confirmed`, `generated`, and `validation_failed` so doctors can
-    regenerate after edits or after a validation failure.
+    data confirmed (`data_confirmed = true`). Allowed source statuses come
+    from document_states.GENERATABLE (`confirmed` = first run, `generated` =
+    regenerate after edits).
 
     The generation runs asynchronously on the `generate` Celery queue. The
     document transitions to `generating` synchronously here; the eventual
-    outcome is reflected in the document status (`generated` /
-    `validation_failed` / `failed`) and surfaced via the existing status
-    polling endpoint.
+    outcome is reflected in the document status (`generated` / `failed`) and
+    surfaced via the existing status polling endpoint.
     """
     doc = await _fetch_doc(document_id, user, db)
     report = await _fetch_report(document_id, db)
@@ -880,13 +921,12 @@ async def trigger_generation(
             detail="Confirm structured data before generating a summary",
         )
 
-    allowed = {"confirmed", "generated", "validation_failed"}
-    if doc.status not in allowed:
+    if not can_generate(doc.status):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
                 f"Cannot generate from status '{doc.status}'. "
-                f"Allowed source statuses: {sorted(allowed)}"
+                f"Allowed source statuses: {sorted(GENERATABLE)}"
             ),
         )
 
