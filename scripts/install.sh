@@ -635,7 +635,22 @@ upgrade() {
     preflight
     validate_env
     disable_dev_override
+
+    # Force a fresh frontend build — build_frontend() skips when a dist/
+    # already exists, which on an upgrade would silently redeploy the OLD UI.
+    if [ -d "$PROJECT_ROOT/frontend/dist" ]; then
+        step "Clearing stale frontend/dist for a clean rebuild"
+        rm -rf "$PROJECT_ROOT/frontend/dist"
+        ok "Removed previous build"
+    fi
     build_frontend
+
+    # Pull latest images for pinned third-party services (db/cache/etc.);
+    # the backend image is rebuilt from source inside start_docker.
+    step "Pulling base service images"
+    (cd "$PROJECT_ROOT" && docker compose pull --quiet 2>/dev/null) || \
+        warn "docker compose pull skipped (offline or no updates)"
+
     start_docker
     wait_for_services
     run_migrations
