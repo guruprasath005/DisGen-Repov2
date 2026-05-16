@@ -157,7 +157,7 @@ collect_inputs() {
     echo "   Get your API key from: platform.openai.com → API keys"
     echo ""
     ask_secret OPENAI_API_KEY  "OpenAI API key"
-    ask        OPENAI_MODEL_ID "OpenAI model" "gpt-4o-mini"
+    ask        OPENAI_MODEL_ID "OpenAI model" "gpt-4o"
 
     echo ""
     echo -e "   ${BOLD}── Hospital Details ──${NC}"
@@ -284,9 +284,14 @@ MINIO_BUCKET=disgen-documents
 AZURE_DOCUMENT_ENDPOINT=${AZURE_DOCUMENT_ENDPOINT}
 AZURE_DOCUMENT_KEY=${AZURE_DOCUMENT_KEY}
 
-# ── OpenAI (LLM) ─────────────────────────────────────────────────────────────
+# ── LLM provider ─────────────────────────────────────────────────────────────
+# openai = US processing, NOT DPDP-compliant (startup logs a warning,
+# /health reports dpdp_compliant=false). Switch before hospital go-live.
+LLM_PROVIDER=openai
 OPENAI_API_KEY=${OPENAI_API_KEY}
 OPENAI_MODEL_ID=${OPENAI_MODEL_ID}
+# Per-chunk source-token budget for long-document extraction (see OPS_RUNBOOK).
+EXTRACTION_CHUNK_TOKEN_BUDGET=6000
 
 # ── PHI Field Encryption (AES-256-GCM) ───────────────────────────────────────
 FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
