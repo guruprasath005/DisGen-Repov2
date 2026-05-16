@@ -326,6 +326,34 @@
 </section>
 {% endif %}
 
+{# ── ICD-10 codes (billing) — rendered when any code is present ──────────── #}
+{% set _icd_primary = structured_data.get('icd10_primary') %}
+{% set _icd_secondary = structured_data.get('icd10_secondary') or [] %}
+{% if _icd_primary or _icd_secondary %}
+<section class="panel">
+  <h2>ICD-10 Codes</h2>
+  <dl class="kv-grid">
+    {% if _icd_primary and _icd_primary is mapping and _icd_primary.get('code') %}
+    <dt>Primary</dt>
+    <dd>
+      <strong>{{ _icd_primary.get('code') }}</strong>
+      {% if _icd_primary.get('description') %} — {{ _icd_primary.get('description') }}{% endif %}
+    </dd>
+    {% endif %}
+    {% if _icd_secondary %}
+    <dt>Secondary</dt>
+    <dd>
+      {% for c in _icd_secondary %}
+        {% if c is mapping and c.get('code') %}
+        <strong>{{ c.get('code') }}</strong>{% if c.get('description') %} — {{ c.get('description') }}{% endif %}{% if not loop.last %}<br>{% endif %}
+        {% endif %}
+      {% endfor %}
+    </dd>
+    {% endif %}
+  </dl>
+</section>
+{% endif %}
+
 {% set dc_meds = structured_data.get('discharge_medications') or [] %}
 {% set stay_meds = structured_data.get('medications_during_stay') or [] %}
 {% if stay_meds or dc_meds %}
