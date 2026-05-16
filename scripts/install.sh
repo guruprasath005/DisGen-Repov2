@@ -608,6 +608,69 @@ print_summary() {
     echo ""
 }
 
+# ── .env validation ───────────────────────────────────────────────────────────
+validate_env() {
+    step "Validating .env"
+    [ -f "$PROJECT_ROOT/.env" ] || fail ".env not found — run a full install first: bash scripts/install.sh"
+
+    if grep -qiE '=[[:space:]]*.*changeme' "$PROJECT_ROOT/.env"; then
+        echo -e "   ${RED}Placeholder secrets still present:${NC}"
+        grep -niE '=[[:space:]]*.*changeme' "$PROJECT_ROOT/.env" | sed -E 's/=.*/=<changeme>/'
+        fail "Replace every 'changeme' value in .env before deploying."
+    fi
+
+    # DPDP note — informational, non-blocking (mirrors the backend startup guard).
+    if ! grep -q '^LLM_PROVIDER=' "$PROJECT_ROOT/.env" || grep -qE '^LLM_PROVIDER=openai[[:space:]]*$' "$PROJECT_ROOT/.env"; then
+        warn "LLM_PROVIDER=openai -> patient PHI is processed in the US (NOT DPDP-compliant)."
+        warn "Switch to an in-India provider before hospital go-live (see backend/llm/provider.py)."
+    fi
+    ok ".env validated"
+}
+
+# ── Idempotent upgrade / redeploy ─────────────────────────────────────────────
+# Rebuild + migrate + restart using the EXISTING .env. No secrets re-prompted
+# or regenerated. Safe to run repeatedly after a `git pull`.
+upgrade() {
+    print_header
+    preflight
+    validate_env
+    disable_dev_override
+    build_frontend
+    start_docker
+    wait_for_services
+    run_migrations
+
+    step "Post-upgrade health check"
+    local code
+    code=$(curl -sk "https://localhost/api/health" -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
+    if [ "$code" = "200" ]; then
+        ok "API healthy (HTTP 200)"
+    else
+        warn "Health returned HTTP ${code} — give it a minute, then: docker compose logs -f backend"
+    fi
+
+    echo ""
+    ok "Upgrade complete — redeployed from existing .env."
+    echo "   Logs:   docker compose logs -f"
+    echo "   Backup: bash scripts/backup.sh   (recommended before upgrades)"
+    echo ""
+}
+
+usage() {
+    cat <<EOF
+DisGen installer / operator
+
+  bash scripts/install.sh            First-time install (interactive)
+  bash scripts/install.sh --upgrade  Idempotent redeploy: rebuild + migrate +
+                                      restart using the existing .env. No
+                                      secrets re-prompted. Run after a git pull.
+  bash scripts/install.sh --validate Check .env for placeholder secrets + DPDP
+  bash scripts/install.sh --help     Show this help
+
+Operations runbook: OPS_RUNBOOK.md
+EOF
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 main() {
     print_header
@@ -631,4 +694,10 @@ main() {
     print_summary
 }
 
-main "$@"
+case "${1:-}" in
+    --upgrade)  upgrade ;;
+    --validate) print_header; validate_env ;;
+    -h|--help)  usage ;;
+    "")         main "$@" ;;
+    *)          echo "Unknown option: $1"; echo; usage; exit 1 ;;
+esac

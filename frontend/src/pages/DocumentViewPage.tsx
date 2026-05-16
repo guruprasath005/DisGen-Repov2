@@ -27,6 +27,7 @@ import { fetchSchemes, type SchemeFieldItem } from "@/api/schemes"
 import { MarkdownClinical } from "@/components/clinical/MarkdownClinical"
 import { SchemeFieldEditor } from "@/components/clinical/SchemeFieldEditor"
 import { StructuredReadOnly } from "@/components/clinical/StructuredReadOnly"
+import { DocumentRecoveryPanel } from "@/components/clinical/DocumentRecoveryPanel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -283,6 +284,16 @@ export default function DocumentViewPage() {
 
   return (
     <div className="space-y-6 pb-12">
+      <DocumentRecoveryPanel
+        documentId={id}
+        status={doc?.status ? String(doc.status) : undefined}
+        structuredData={structuredQuery.data?.data}
+        isDoctor={isDoctor}
+        onChanged={() => {
+          void docQuery.refetch()
+          void structuredQuery.refetch()
+        }}
+      />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-2">
           {docQuery.isLoading ? (
