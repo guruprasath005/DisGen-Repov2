@@ -507,9 +507,16 @@ seed_database() {
     echo "   Seeding schemes and ChromaDB RAG rules..."
     docker exec disgen-backend-1 python3 /app/seed/schemes.py 2>&1 | tail -1
 
+    # Apply HOSPITAL_NAME from .env to the hospital_config singleton row.
+    # Idempotent: only overrides the SQL default placeholder, never overwrites
+    # a value set by the super-admin through the UI.
+    echo "   Applying hospital_config from .env (HOSPITAL_NAME)..."
+    docker exec disgen-backend-1 python3 /app/seed/hospital_config.py 2>&1 | tail -1
+
     ok "74,719 ICD-10 codes loaded"
     ok "690 drug mappings loaded"
     ok "6 built-in schemes loaded (PM-JAY, CGHS, ESI, CMCHIS, Private, Complete)"
+    ok "hospital_config seeded from .env"
 }
 
 # ── Create Super Admin ────────────────────────────────────────────────────────
@@ -659,6 +666,11 @@ upgrade() {
     start_docker
     wait_for_services
     run_migrations
+
+    # Re-apply hospital_config seed (idempotent — preserves UI customisations).
+    step "Re-applying hospital_config from .env"
+    docker exec disgen-backend-1 python3 /app/seed/hospital_config.py 2>&1 | tail -1 || \
+        warn "hospital_config seed skipped"
 
     step "Post-upgrade health check"
     local code
