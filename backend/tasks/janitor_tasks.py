@@ -5,7 +5,7 @@ Scans the documents table every 10 minutes for records that have been in an
 in-flight processing status longer than the configured timeout and transitions
 them to 'failed'. This prevents documents from being permanently stuck when
 a Celery worker crashes, a broker restart drops a message, or an external
-service (Azure DI, Bedrock) hangs without returning.
+service (Azure DI, the LLM provider) hangs without returning.
 
 Stuck thresholds:
   processing / ocr_complete / extracting  →  15 minutes  (OCR + extraction pipeline)

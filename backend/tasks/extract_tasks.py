@@ -7,14 +7,14 @@ Flow:
   1. Fetch Document — verify status is ocr_complete
   2. Decrypt and deserialize the encrypted OCR payload
   3. Set document status → extracting
-  4. Call LLM extractor (AWS Bedrock Claude 3.5 Sonnet v2) + NLP/regex fallback merge
+  4. Call LLM extractor (configured LLM provider) + NLP/regex fallback merge
   5. Map raw diagnoses → ICD-10 codes via pg_trgm
   6. Normalize drug names via pg_trgm
   7. Encrypt final StructuredData → upsert into structured_reports
   8. Set document status → ready
   9. Write EXTRACT_COMPLETE audit log
 
-The LLM call (step 4) is synchronous (boto3 Bedrock SDK). It runs inside asyncio.run()
+The LLM call (step 4) is synchronous (provider SDK). It runs inside asyncio.run()
 the same way as the OCR task — safe under Celery prefork concurrency.
 
 Retry policy: 2 retries for transient errors (LLM 5xx, DB unavailable).

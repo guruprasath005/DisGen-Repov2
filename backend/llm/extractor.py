@@ -4,7 +4,7 @@ LLM-based structured clinical data extraction + ICD-10 / drug mapping.
 Extraction flow
 ───────────────
 1. Build prompt from OCR result: full text + markdown tables + key-value pairs
-2. Call OpenAI GPT-4o mini (JSON mode, temperature=0)
+2. Call the configured LLM provider (JSON mode, temperature=0)
 3. Parse response into StructuredData
 4. On LLM failure or JSON parse error: run spaCy + regex fallback
 5. Merge: LLM fields are primary; fallback fills any null values
@@ -300,8 +300,8 @@ def _build_user_message(ocr_data: dict) -> str:
     """
     Compose the user message: full text + tables (markdown) + key-value pairs.
 
-    GPT-4o mini has a 128K token context window — the entire document is
-    sent without truncation so no data is lost for the doctor review screen.
+    gpt-4o has a 128K-token context window — the entire document is sent as
+    input without truncation. (Output truncation is handled in Phase 4.)
     """
     full_text: str = ocr_data.get("full_text") or ""
     tables: list = ocr_data.get("tables") or []
@@ -328,7 +328,7 @@ def _build_user_message(ocr_data: dict) -> str:
 
 def _call_llm(ocr_data: dict) -> dict | None:
     """
-    Call OpenAI GPT-4o mini and parse the JSON response.
+    Call the configured LLM provider and parse the JSON response.
     Returns the parsed dict on success, None on any failure.
     """
     user_message = _build_user_message(ocr_data)
@@ -446,7 +446,7 @@ def extract_structured(ocr_data: dict) -> StructuredData:
     On LLM failure: NLP/regex only, extraction_source = "nlp_fallback".
     On total failure: empty StructuredData, extraction_source = "failed".
 
-    This function is synchronous — it calls the Bedrock SDK directly.
+    This function is synchronous — it calls the LLM provider SDK directly.
     Run it in asyncio.to_thread() if you need to avoid blocking an event loop.
     """
     llm_data = _call_llm(ocr_data)

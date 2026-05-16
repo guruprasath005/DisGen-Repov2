@@ -1,5 +1,5 @@
 """
-Discharge summary generation via OpenAI GPT-4o mini.
+Discharge summary generation via the configured LLM provider (llm/provider.py).
 
 Structured output via function/tool use:
   1. Sanitize prompt-injection patterns from all string fields.

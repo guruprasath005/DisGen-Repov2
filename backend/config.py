@@ -29,11 +29,14 @@ class Settings(BaseSettings):
     azure_document_endpoint: str = ""
     azure_document_key: str = ""
 
-    # ── OpenAI (LLM — development use) ───────────────────────────────────────
-    # For production hospital deployment replace with AWS Bedrock (ap-south-1)
-    # to restore DPDP data-residency compliance (data must stay in India).
+    # ── LLM provider ─────────────────────────────────────────────────────────
+    # Pluggable via llm/provider.py. "openai" processes prompts (patient PHI)
+    # in the US — NOT DPDP-compliant for a production Indian hospital. The
+    # hospital has agreed to switch to an in-India provider post-approval;
+    # that switch is just LLM_PROVIDER + a provider class, no rewrite.
+    llm_provider: str = "openai"
     openai_api_key: str = ""
-    openai_model_id: str = "gpt-4o-mini"
+    openai_model_id: str = "gpt-4o"
 
     # ── Field Encryption (AES-256-GCM) ────────────────────────────────────────
     # Must be exactly 32 bytes, base64-encoded. Generate: openssl rand -base64 32

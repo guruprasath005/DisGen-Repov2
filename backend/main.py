@@ -94,6 +94,32 @@ async def lifespan(app: FastAPI):
     _assert_secret(settings.minio_access_key, "MINIO_ACCESS_KEY")
     _assert_secret(settings.celery_broker_url, "CELERY_BROKER_URL")
 
+    # ── DPDP data-residency guard ─────────────────────────────────────────────
+    # Refuse to boot silently with a non-compliant LLM provider. We do not hard
+    # block (the hospital review explicitly runs on OpenAI/US first), but the
+    # warning is loud and the state is exposed at /health so go-live cannot
+    # accidentally ship without the in-India switch.
+    try:
+        from llm.provider import configured_residency
+
+        _llm_name, _residency, _compliant = configured_residency()
+        if _compliant:
+            logger.info("LLM provider=%s — DPDP data-residency OK", _llm_name)
+        else:
+            logger.warning(
+                "================================================================\n"
+                "  DPDP WARNING: LLM provider '%s' processes patient PHI at "
+                "data_residency='%s'.\n"
+                "  This is NOT DPDP-compliant for a production Indian hospital.\n"
+                "  Acceptable for pre-approval review ONLY. Switch LLM_PROVIDER "
+                "to an in-India\n  provider before go-live.\n"
+                "================================================================",
+                _llm_name,
+                _residency,
+            )
+    except Exception:
+        logger.exception("LLM provider residency check failed")
+
     # Seed built-in scheme RAG collections in ChromaDB. Idempotent — skips
     # any collection that already has documents. Wrapped in try/except so a
     # ChromaDB outage does not block API startup; generation will fall back
@@ -179,7 +205,18 @@ async def request_id_middleware(request: Request, call_next):
 
 @app.get("/health", tags=["System"])
 def health():
-    return {"status": "ok"}
+    try:
+        from llm.provider import configured_residency
+
+        llm_name, residency, compliant = configured_residency()
+    except Exception:
+        llm_name, residency, compliant = "unknown", "unknown", False
+    return {
+        "status": "ok",
+        "llm_provider": llm_name,
+        "llm_data_residency": residency,
+        "dpdp_compliant": compliant,
+    }
 
 
 @app.get("/", tags=["System"])
