@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from llm.client import LLMClient
 from nlp import extractor as regex_extractor
 from nlp import pipeline as spacy_extractor
@@ -137,6 +138,9 @@ class StructuredData:
 
     # Extraction metadata
     extraction_source: str = "llm"  # "llm" | "nlp_fallback" | "merged" | "failed"
+    # Coverage/diagnostics for the doctor-review UI: which pages contributed,
+    # which produced nothing, whether any chunk was truncated, OCR confidence.
+    extraction_meta: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -326,58 +330,294 @@ def _build_user_message(ocr_data: dict) -> str:
 # ── LLM extraction ─────────────────────────────────────────────────────────────
 
 
-def _call_llm(ocr_data: dict) -> dict | None:
+_LIST_KEYS: frozenset[str] = frozenset({
+    "secondary_diagnoses", "presenting_complaints", "investigations",
+    "procedures", "medications_during_stay", "discharge_medications",
+    "discharge_advice", "past_medical_history", "past_surgical_history",
+    "comorbidities", "post_operative_course", "imaging", "serology",
+    "urine_findings",
+})
+
+
+def _estimate_tokens(text: str) -> int:
+    """Cheap, dependency-free token estimate (~4 chars/token)."""
+    return max(1, len(text) // 4)
+
+
+def _ocr_pages(ocr_data: dict) -> list[tuple[int, str]]:
     """
-    Call the configured LLM provider and parse the JSON response.
-    Returns the parsed dict on success, None on any failure.
+    Return [(page_number, page_text)] sorted by page.
+
+    Uses Azure's per-page `sections` ("Page N" -> text). Falls back to a
+    single synthetic page from full_text when sections are unavailable.
     """
-    user_message = _build_user_message(ocr_data)
+    sections: dict = ocr_data.get("sections") or {}
+    pages: list[tuple[int, str]] = []
+    for key, val in sections.items():
+        try:
+            num = int(str(key).strip().split()[-1])
+        except (ValueError, IndexError):
+            num = len(pages) + 1
+        pages.append((num, val or ""))
+    pages.sort(key=lambda p: p[0])
+    if not pages:
+        full = ocr_data.get("full_text") or ""
+        return [(1, full)] if full.strip() else []
+    return pages
+
+
+def _chunk_pages(
+    pages: list[tuple[int, str]], budget_tokens: int
+) -> list[list[tuple[int, str]]]:
+    """
+    Group consecutive pages into chunks under `budget_tokens` of source.
+
+    Bounding source size bounds expected JSON output size — that is what
+    keeps a lab-heavy K-shape from overflowing the model's 16K output cap.
+    A single page over budget becomes its own chunk (split further only if
+    the model actually truncates).
+    """
+    chunks: list[list[tuple[int, str]]] = []
+    cur: list[tuple[int, str]] = []
+    cur_tok = 0
+    for num, txt in pages:
+        t = _estimate_tokens(txt)
+        if cur and cur_tok + t > budget_tokens:
+            chunks.append(cur)
+            cur, cur_tok = [], 0
+        cur.append((num, txt))
+        cur_tok += t
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def _chunk_ocr_payload(
+    page_subset: list[tuple[int, str]],
+    all_tables: list[dict],
+    key_values: dict,
+    include_key_values: bool,
+) -> dict:
+    """Build an ocr_data-shaped dict scoped to one chunk's pages."""
+    page_nums = {n for n, _ in page_subset}
+    text = "\n".join(t for _, t in page_subset)
+    tables = [tb for tb in (all_tables or []) if tb.get("page") in page_nums]
+    return {
+        "full_text": text,
+        "tables": tables,
+        # Form key-values are document-level; attach once (first chunk) so
+        # they aren't duplicated into every chunk's prompt and budget.
+        "key_values": key_values if include_key_values else {},
+    }
+
+
+def _fill_missing_keys(parsed: dict) -> dict:
+    """Ensure every required key exists (null / [] as appropriate)."""
+    for k in _REQUIRED_KEYS - parsed.keys():
+        parsed[k] = [] if k in _LIST_KEYS else None
+    return parsed
+
+
+def _call_llm_once(chunk_ocr: dict) -> tuple[dict | None, str]:
+    """
+    One LLM extraction call for one chunk.
+
+    Returns (parsed_or_None, finish_reason). finish_reason == "length" means
+    the output was truncated — the caller splits and retries instead of
+    silently repairing truncated JSON and dropping clinical rows.
+    """
+    user_message = _build_user_message(chunk_ocr)
     try:
-        response_text = LLMClient.get_instance().chat(
+        text, finish = LLMClient.get_instance().chat_with_finish(
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
             temperature=0.0,
             top_p=1.0,
-            max_tokens=16383,
+            max_tokens=16384,
             json_mode=True,
         )
     except Exception as exc:
         logger.error("LLM API call failed: %s", exc)
-        return None
+        return None, "error"
 
     try:
-        parsed = json.loads(response_text)
-    except json.JSONDecodeError as exc:
-        logger.warning("LLM returned invalid JSON (likely truncated): %s — attempting repair", exc)
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
         try:
             from json_repair import repair_json  # noqa: PLC0415
-            parsed = json.loads(repair_json(response_text))
-            logger.info("JSON repair succeeded — proceeding with repaired response")
+
+            parsed = json.loads(repair_json(text))
+            logger.warning("JSON repair used for chunk (finish=%s)", finish)
         except Exception as repair_exc:
-            logger.error("JSON repair also failed: %s — raw: %.200s", repair_exc, response_text)
-            return None
+            logger.error(
+                "JSON repair failed: %s — raw: %.200s", repair_exc, text
+            )
+            return None, finish
 
     if not isinstance(parsed, dict):
-        logger.error("LLM response is not a JSON object: %.100s", response_text)
+        logger.error("LLM response is not a JSON object: %.100s", text)
+        return None, finish
+
+    return _fill_missing_keys(parsed), finish
+
+
+def _extract_chunk(
+    page_subset: list[tuple[int, str]],
+    all_tables: list[dict],
+    key_values: dict,
+    include_key_values: bool,
+    meta: dict,
+    depth: int = 0,
+) -> dict | None:
+    """
+    Extract one chunk, splitting on truncation.
+
+    If the model truncates (finish_reason == "length") and the chunk spans
+    more than one page, split the pages in half, extract each sub-range, and
+    merge — so no lab row is lost to the output cap. A single page that still
+    truncates falls back to repaired JSON, recorded in `meta`.
+    """
+    parsed, finish = _call_llm_once(
+        _chunk_ocr_payload(
+            page_subset, all_tables, key_values, include_key_values
+        )
+    )
+    page_label = ",".join(str(n) for n, _ in page_subset)
+
+    if finish == "length" and len(page_subset) > 1 and depth < 6:
+        mid = len(page_subset) // 2
+        logger.warning(
+            "Chunk pages [%s] truncated — splitting (depth=%d)",
+            page_label,
+            depth,
+        )
+        meta["truncated_chunks"].append(page_label)
+        left = _extract_chunk(
+            page_subset[:mid], all_tables, key_values,
+            include_key_values, meta, depth + 1,
+        )
+        right = _extract_chunk(
+            page_subset[mid:], all_tables, {}, False, meta, depth + 1,
+        )
+        return _merge_chunk_dicts([d for d in (left, right) if d]) or None
+
+    if finish == "length" and len(page_subset) == 1:
+        logger.error(
+            "Single page [%s] truncated at full output budget — data on "
+            "this page may be incomplete",
+            page_label,
+        )
+        meta["truncated_chunks"].append(page_label)
+
+    if parsed is None:
+        meta["failed_pages"].extend(n for n, _ in page_subset)
         return None
 
-    # Verify all required keys are present
-    missing = _REQUIRED_KEYS - parsed.keys()
-    if missing:
-        logger.warning("LLM response missing keys: %s — filling with nulls", missing)
-        _list_keys = {
-            "secondary_diagnoses", "presenting_complaints", "investigations",
-            "procedures", "medications_during_stay", "discharge_medications",
-            "discharge_advice", "past_medical_history", "past_surgical_history",
-            "comorbidities", "post_operative_course", "imaging", "serology",
-            "urine_findings",
-        }
-        for k in missing:
-            parsed[k] = [] if k in _list_keys else None
-
+    meta["pages_with_content"].extend(n for n, _ in page_subset)
     return parsed
+
+
+# ── Deterministic chunk merge ──────────────────────────────────────────────────
+
+# "First non-null wins" across chunks (page order is deterministic).
+_SCALAR_FIRST: frozenset[str] = frozenset({
+    "patient_name", "age", "gender", "uhid", "abha_id", "phone",
+    "admission_date", "discharge_date", "ward", "bed_number", "department",
+    "primary_diagnosis", "blood_pressure", "pulse_rate", "respiratory_rate",
+    "temperature", "oxygen_saturation", "weight", "height",
+    "follow_up_instructions", "follow_up_date", "diet_advice", "allergies",
+    "consultant", "surgeon", "anesthetist", "blood_group",
+})
+# Narrative accumulated across chunks (dedup, joined).
+_ACCUMULATE_TEXT: frozenset[str] = frozenset({"hospital_course"})
+# Nested dicts merged sub-key-wise (first non-null per sub-key).
+_DICT_FIELDS: frozenset[str] = frozenset({"donor_details", "operative_details"})
+# Object-list fields → dedupe on these key tuples.
+_LIST_DEDUPE_KEYS: dict[str, tuple[str, ...]] = {
+    "investigations": ("name", "value", "date"),
+    "medications_during_stay": ("name", "dose", "frequency"),
+    "discharge_medications": ("name", "dose", "frequency"),
+    "procedures": ("name", "date"),
+    "imaging": ("modality", "finding", "date"),
+    "serology": ("name", "result"),
+    "post_operative_course": ("day", "parameter", "value"),
+    "urine_findings": ("name", "value"),
+}
+# String-list fields → dedupe on the normalized string itself.
+_STR_LIST_FIELDS: frozenset[str] = frozenset({
+    "secondary_diagnoses", "presenting_complaints", "discharge_advice",
+    "past_medical_history", "past_surgical_history", "comorbidities",
+})
+
+
+def _norm(v) -> str:
+    return str(v).strip().lower() if v is not None else ""
+
+
+def _dedupe(items: list, keys: tuple[str, ...]) -> list:
+    """Order-preserving dedupe. Objects keyed by `keys`; scalars by value."""
+    seen: set[str] = set()
+    out: list = []
+    for it in items:
+        if isinstance(it, dict):
+            k = (
+                "|".join(_norm(it.get(x)) for x in keys)
+                if keys
+                else "|".join(f"{a}={_norm(b)}" for a, b in sorted(it.items()))
+            )
+        else:
+            k = _norm(it)
+        if k and k not in seen:
+            seen.add(k)
+            out.append(it)
+    return out
+
+
+def _merge_chunk_dicts(dicts: list[dict]) -> dict:
+    """Deterministically merge per-chunk extraction dicts — no data dropped."""
+    if not dicts:
+        return {}
+    out: dict = {}
+    for key in _REQUIRED_KEYS:
+        if key in _SCALAR_FIRST:
+            val = None
+            for d in dicts:
+                cand = d.get(key)
+                if cand is not None and str(cand).strip():
+                    val = cand
+                    break
+            out[key] = val
+        elif key in _ACCUMULATE_TEXT:
+            seen: set[str] = set()
+            parts: list[str] = []
+            for d in dicts:
+                v = d.get(key)
+                if isinstance(v, str) and v.strip() and _norm(v) not in seen:
+                    seen.add(_norm(v))
+                    parts.append(v.strip())
+            out[key] = "\n\n".join(parts) if parts else None
+        elif key in _DICT_FIELDS:
+            sub_out: dict = {}
+            for d in dicts:
+                sub = d.get(key)
+                if isinstance(sub, dict):
+                    for sk, sv in sub.items():
+                        if sub_out.get(sk) in (None, "") and sv not in (None, ""):
+                            sub_out[sk] = sv
+            out[key] = sub_out or None
+        else:
+            collected: list = []
+            for d in dicts:
+                v = d.get(key)
+                if isinstance(v, list):
+                    collected.extend(v)
+            out[key] = _dedupe(
+                collected,
+                () if key in _STR_LIST_FIELDS else _LIST_DEDUPE_KEYS.get(key, ()),
+            )
+    return out
 
 
 # ── NLP + regex fallback ───────────────────────────────────────────────────────
@@ -440,36 +680,83 @@ def _merge(llm_data: dict, fallback_data: dict) -> dict:
 
 def extract_structured(ocr_data: dict) -> StructuredData:
     """
-    Run LLM extraction on the OCR payload dict.
+    Page-aware chunked LLM extraction with deterministic merge.
 
-    On LLM success: merge with NLP fallback (fills any nulls).
-    On LLM failure: NLP/regex only, extraction_source = "nlp_fallback".
-    On total failure: empty StructuredData, extraction_source = "failed".
+    Long Indian K-shape / Ayushman discharge summaries (10–20 scanned pages,
+    every lab parameter itemised) overflow a single call's 16K output cap and
+    used to lose rows silently via JSON repair. The document is now split into
+    page-grouped chunks under a token budget, each extracted independently,
+    truncation-split on demand, then merged with no row dropped. The spaCy/
+    regex fallback still fills scalar nulls. Coverage diagnostics are recorded
+    in extraction_meta for the doctor-review UI.
 
-    This function is synchronous — it calls the LLM provider SDK directly.
-    Run it in asyncio.to_thread() if you need to avoid blocking an event loop.
+    Synchronous — run in asyncio.to_thread() from async contexts.
     """
-    llm_data = _call_llm(ocr_data)
+    pages = _ocr_pages(ocr_data)
+    all_tables = ocr_data.get("tables") or []
+    key_values = ocr_data.get("key_values") or {}
+
+    meta: dict = {
+        "pages_total": len(pages),
+        "pages_with_content": [],
+        "failed_pages": [],
+        "truncated_chunks": [],
+        "chunk_count": 0,
+        "ocr_confidence": ocr_data.get("confidence"),
+    }
+
+    chunk_dicts: list[dict] = []
+    if pages:
+        chunks = _chunk_pages(pages, settings.extraction_chunk_token_budget)
+        meta["chunk_count"] = len(chunks)
+        for i, chunk in enumerate(chunks):
+            parsed = _extract_chunk(
+                chunk, all_tables, key_values,
+                include_key_values=(i == 0), meta=meta,
+            )
+            if parsed:
+                chunk_dicts.append(parsed)
+
     fallback_data = _run_fallback(ocr_data)
 
-    if llm_data is not None:
-        merged = _merge(llm_data, fallback_data)
+    if chunk_dicts:
+        merged = _merge(_merge_chunk_dicts(chunk_dicts), fallback_data)
         source = "merged" if fallback_data else "llm"
     else:
-        logger.warning("LLM extraction failed — using NLP/regex fallback only")
+        logger.warning("All LLM chunks failed — using NLP/regex fallback only")
         merged = fallback_data
         source = "nlp_fallback" if fallback_data else "failed"
 
-    # Hydrate into StructuredData — unknown/extra keys are silently dropped
+    # ── Coverage summary for the doctor-review UI ─────────────────────────────
+    all_nums = {n for n, _ in pages}
+    covered = sorted(set(meta["pages_with_content"]))
+    meta["pages_with_content"] = covered
+    meta["pages_empty"] = sorted(all_nums - set(covered))
+    meta["failed_pages"] = sorted(set(meta["failed_pages"]))
+    low_conf = (
+        isinstance(meta["ocr_confidence"], (int, float))
+        and meta["ocr_confidence"] < 0.6
+    )
+    meta["low_ocr_confidence"] = bool(low_conf)
+    meta["needs_doctor_review"] = bool(
+        meta["pages_empty"]
+        or meta["truncated_chunks"]
+        or low_conf
+        or source in ("nlp_fallback", "failed")
+    )
+
     valid_fields = {f.name for f in dataclasses.fields(StructuredData)}
     filtered = {k: v for k, v in merged.items() if k in valid_fields}
     filtered["extraction_source"] = source
+    filtered["extraction_meta"] = meta
 
     try:
         return StructuredData(**filtered)
     except TypeError as exc:
-        logger.error("StructuredData construction failed: %s — returning empty", exc)
-        return StructuredData(extraction_source="failed")
+        logger.error(
+            "StructuredData construction failed: %s — returning empty", exc
+        )
+        return StructuredData(extraction_source="failed", extraction_meta=meta)
 
 
 # ── ICD-10 mapping (requires DB) ──────────────────────────────────────────────

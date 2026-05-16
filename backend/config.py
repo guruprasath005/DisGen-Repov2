@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model_id: str = "gpt-4o"
 
+    # Per-chunk source-token budget for long-document extraction. Smaller =
+    # safer against the 16K output cap (no silent JSON truncation on 10–20
+    # page K-shapes); larger = fewer LLM calls. 6000 keeps output well clear
+    # of the cap with margin for lab-heavy documents.
+    extraction_chunk_token_budget: int = 6000
+
     # ── Field Encryption (AES-256-GCM) ────────────────────────────────────────
     # Must be exactly 32 bytes, base64-encoded. Generate: openssl rand -base64 32
     field_encryption_key: str = "changeme-must-be-32-bytes-base64="

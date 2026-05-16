@@ -116,6 +116,7 @@ _EDITABLE_FIELDS: frozenset[str] = frozenset(
         "icd10_primary_candidates",
         "icd10_secondary_candidates",
         "extraction_source",
+        "extraction_meta",
     )
 )
 
