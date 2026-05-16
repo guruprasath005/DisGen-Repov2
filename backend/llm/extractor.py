@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy import text
@@ -827,9 +828,119 @@ _ICD10_QUERY = text("""
     LIMIT 5
 """)
 
-_ICD10_SOURCE_AUTO = "auto"        # sim > 0.4 — assigned automatically
-_ICD10_SOURCE_CANDIDATE = "candidate"  # 0.2–0.4 — doctor chooses from list
-_ICD10_SOURCE_MANUAL = "manual"    # no match — doctor must enter code manually
+# Threshold tuning (ISS-002): 0.4 was too permissive — long verbose source
+# diagnoses matched short ICD descriptions on shared word fragments (e.g.
+# "Systemic Hypertension" -> "Portal hypertension"). 0.5 is conservative
+# enough to exclude those while still catching obvious matches.
+_ICD10_AUTO_THRESHOLD = 0.5
+_ICD10_CANDIDATE_THRESHOLD = 0.2
+
+_ICD10_SOURCE_AUTO = "auto"            # sim > 0.5 — assigned automatically
+_ICD10_SOURCE_CANDIDATE = "candidate"  # 0.2–0.5 — doctor chooses from list
+_ICD10_SOURCE_MANUAL = "manual"        # no match — doctor must enter code manually
+
+# Clinical abbreviation aliases (ISS-003) — when the source uses an Indian
+# clinical abbreviation, also query against the expanded form so the
+# pg_trgm lookup can find the matching ICD description (which is always
+# spelled out). The first entry that produces a higher similarity wins.
+# Keep concise: only common, unambiguous abbreviations.
+_ICD10_ALIASES: dict[str, str] = {
+    "ards": "acute respiratory distress syndrome",
+    "aki": "acute kidney failure",
+    "akf": "acute kidney failure",
+    "ckd": "chronic kidney disease",
+    "t2dm": "type 2 diabetes mellitus",
+    "t1dm": "type 1 diabetes mellitus",
+    "dm": "diabetes mellitus",
+    "htn": "essential hypertension",
+    "hypertension": "essential hypertension",
+    "systemic hypertension": "essential hypertension",
+    "mi": "myocardial infarction",
+    "stemi": "st elevation myocardial infarction",
+    "nstemi": "non st elevation myocardial infarction",
+    "cad": "coronary artery disease",
+    "cva": "cerebrovascular accident",
+    "tia": "transient ischemic attack",
+    "uti": "urinary tract infection",
+    "copd": "chronic obstructive pulmonary disease",
+    "hap": "hospital acquired pneumonia",
+    "vap": "ventilator associated pneumonia",
+    "cap": "community acquired pneumonia",
+    "dvt": "deep vein thrombosis",
+    "pe": "pulmonary embolism",
+    "uri": "upper respiratory infection",
+    "lrti": "lower respiratory tract infection",
+    "afib": "atrial fibrillation",
+    "af": "atrial fibrillation",
+    "chf": "congestive heart failure",
+    "hf": "heart failure",
+    "sepsis with septic shock": "severe sepsis with septic shock",
+    "cholelithiasis": "calculus of gallbladder",
+}
+
+# Strip clinical qualifiers that dilute trigram similarity without changing
+# the underlying condition (resolved/recovered status, severity grades,
+# parenthetical aetiology, treatment plan).
+_ICD10_NOISE = re.compile(
+    r"\b(uncontrolled|resolved|recovered|treated|stable|known|chronic|acute on chronic|"
+    r"newly diagnosed|hba1c\s*\d+(\.\d+)?%?|stage\s*\d+|kdigo\s*stage\s*\d+|grade\s*\d+|"
+    r"class\s*[ivx]+|moderate|severe|mild|on insulin|on metformin|for interval\s+\w+ectomy)\b",
+    re.IGNORECASE,
+)
+
+
+def _clean_diagnosis(text: str) -> str:
+    """
+    Reduce a verbose diagnosis string to the underlying condition for ICD lookup.
+
+    Strips parentheticals, anything after " - " (qualifiers like " - resolved"),
+    common severity/management noise, then collapses whitespace. Original text
+    is preserved on the candidate dict via the caller's raw_text field.
+    """
+    s = (text or "").strip()
+    if not s:
+        return ""
+    # Drop trailing qualifiers introduced by " - " (e.g. " - resolved", " - for interval ...")
+    if " - " in s:
+        s = s.split(" - ", 1)[0]
+    # Drop parentheticals — they're usually aetiology/details not in ICD descriptions
+    s = re.sub(r"\([^)]*\)", " ", s)
+    # Strip explicit noise terms
+    s = _ICD10_NOISE.sub(" ", s)
+    # Collapse whitespace and trim
+    s = re.sub(r"\s+", " ", s).strip(" ,;-")
+    return s
+
+
+def _candidate_queries(diagnosis: str) -> list[str]:
+    """
+    Build the ordered list of query strings to try against icd10_codes.
+
+    Order: cleaned text → alias expansion of cleaned → original.
+    Earlier query that yields the best similarity wins.
+    """
+    cleaned = _clean_diagnosis(diagnosis)
+    queries: list[str] = []
+    if cleaned:
+        queries.append(cleaned)
+        alias = _ICD10_ALIASES.get(cleaned.lower())
+        if alias and alias != cleaned.lower():
+            queries.append(alias)
+        # Also try alias by first 1-3 words (catches abbrev. as a prefix)
+        first = cleaned.split(" ", 1)[0].lower()
+        if first in _ICD10_ALIASES and _ICD10_ALIASES[first] not in queries:
+            queries.append(_ICD10_ALIASES[first])
+    if diagnosis and diagnosis.strip() != cleaned:
+        queries.append(diagnosis.strip())
+    # Deduplicate, preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for q in queries:
+        ql = q.lower()
+        if ql and ql not in seen:
+            seen.add(ql)
+            out.append(q)
+    return out
 
 
 async def map_icd10_codes(
@@ -844,9 +955,9 @@ async def map_icd10_codes(
       (icd10_primary, icd10_primary_candidates, icd10_secondary, icd10_secondary_candidates)
 
     icd10_primary — best match for primary diagnosis (or None)
-    icd10_primary_candidates — candidate list if score is 0.2–0.4
+    icd10_primary_candidates — candidate list if score is 0.2–_ICD10_AUTO_THRESHOLD
     icd10_secondary — best match per secondary diagnosis
-    icd10_secondary_candidates — per secondary: candidates when score 0.2–0.4
+    icd10_secondary_candidates — per secondary: candidates when score 0.2–_ICD10_AUTO_THRESHOLD
     """
     primary_result, primary_candidates = await _map_single(primary_diagnosis, db)
     secondary_results: list[dict] = []
@@ -869,38 +980,56 @@ async def _map_single(
     """
     Map one diagnosis string. Returns (best_match | None, candidates).
 
-    best_match  — {code, description, similarity, source} when sim > 0.4
-    candidates  — [{code, description, similarity}] when sim is 0.2–0.4
+    Tries: (1) cleaned diagnosis, (2) abbreviation-expanded form, (3) original.
+    Keeps the highest-similarity row across attempts. Auto-assigns only when
+    that best similarity clears _ICD10_AUTO_THRESHOLD (0.5) — preventing the
+    long-text-vs-short-ICD false positives seen in Phase E.
     """
     if not diagnosis or not diagnosis.strip():
         return None, []
 
-    rows = (await db.execute(_ICD10_QUERY, {"q": diagnosis.strip()})).fetchall()
-    if not rows:
+    raw_text = diagnosis.strip()
+    queries = _candidate_queries(raw_text)
+    if not queries:
         return None, []
 
-    best = rows[0]
+    # Run each query, keep the highest-similarity rowset.
+    best_rows = []
+    best_top_sim = 0.0
+    for q in queries:
+        rows = (await db.execute(_ICD10_QUERY, {"q": q})).fetchall()
+        if not rows:
+            continue
+        top = float(rows[0].sim)
+        if top > best_top_sim:
+            best_top_sim = top
+            best_rows = rows
+
+    if not best_rows:
+        return None, []
+
+    best = best_rows[0]
     best_sim: float = float(best.sim)
 
-    if best_sim > 0.4:
+    if best_sim > _ICD10_AUTO_THRESHOLD:
         return {
             "code": best.code,
             "description": best.description,
             "similarity": round(best_sim, 4),
             "source": _ICD10_SOURCE_AUTO,
-            "raw_text": diagnosis,
+            "raw_text": raw_text,
         }, []
 
-    # 0.2 – 0.4 range: return as candidates for doctor review
+    # candidate range: return all for doctor review
     candidates = [
         {
             "code": r.code,
             "description": r.description,
             "similarity": round(float(r.sim), 4),
             "source": _ICD10_SOURCE_CANDIDATE,
-            "raw_text": diagnosis,
+            "raw_text": raw_text,
         }
-        for r in rows
+        for r in best_rows
     ]
     return None, candidates
 
