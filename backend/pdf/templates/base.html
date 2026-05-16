@@ -80,6 +80,26 @@
     margin-bottom: 14px;
     page-break-inside: avoid;
   }
+  /* Allergies panel — patient-safety: rendered prominently, always visible,
+     never page-broken. Red accent so it cannot be missed. */
+  .panel.allergies {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #dc2626;
+  }
+  .panel.allergies h2 {
+    color: #dc2626;
+  }
+  .panel.allergies .nkda {
+    color: #16a34a;
+    font-weight: 600;
+    font-size: 10pt;
+  }
+  .panel.allergies .known {
+    color: #991b1b;
+    font-weight: 600;
+    font-size: 10pt;
+  }
   .panel h2 {
     margin: 0 0 8px;
     font-size: 10.5pt;
@@ -267,6 +287,17 @@
     <dt>Ward</dt><dd>{{ structured_data.ward or 'Not documented' }}</dd>
     <dt>Bed</dt><dd>{{ structured_data.bed_number or 'Not documented' }}</dd>
   </dl>
+</section>
+
+{# ── Allergies — SAFETY-CRITICAL, always rendered (NKDA when none documented) #}
+{% set _allergies = structured_data.get('allergies') %}
+<section class="panel allergies">
+  <h2>Allergies</h2>
+  {% if _allergies and _allergies|trim and _allergies|trim|lower not in ['none', 'nil', 'nkda', 'no known allergies', 'not documented'] %}
+    <p class="known">⚠ {{ _allergies }}</p>
+  {% else %}
+    <p class="nkda">NO KNOWN DRUG ALLERGIES (NKDA)</p>
+  {% endif %}
 </section>
 
 {# ── Clinical narrative panels (always from confirmed structured data) ─────── #}
