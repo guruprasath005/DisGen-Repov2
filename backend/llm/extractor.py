@@ -106,6 +106,25 @@ class StructuredData:
     surgeon: str | None = None
     anesthetist: str | None = None
 
+    # ── Scheme / Coverage metadata (ISS-006) ─────────────────────────────────
+    # Identifiers and package details for government schemes (PM-JAY, CGHS, ESI,
+    # state schemes) and private insurance. Field names mirror the placeholders
+    # already used by backend/pdf/templates/pmjay.html so extracted values can
+    # surface in the PDF even before per-scheme generation runs. For non-PMJAY
+    # schemes these capture the equivalent concept (CGHS card no., ESI
+    # beneficiary id, etc.) and the LLM generator maps them to scheme-specific
+    # output fields via the field hints in scheme.required_fields.
+    scheme_name: str | None = None              # e.g., "PM-JAY", "CGHS", "ESI", "Private"
+    pmjay_beneficiary_id: str | None = None     # PM-JAY family/household ID or CGHS/ESI card no.
+    pmjay_preauth_number: str | None = None     # pre-authorisation reference
+    hbp_package_code: str | None = None         # HBP / package code (e.g., MG-SE-31)
+    hbp_procedure_code: str | None = None       # procedure code within the package
+    pmjay_hid_card_number: str | None = None    # ABHA / HID; usually == abha_id
+    medco_name: str | None = None               # PM-JAY MEDCO name (if present)
+    implants_consumables: str | None = None     # implants / consumables used, or "None"
+    package_cost_approved: str | None = None    # kept as string to preserve "₹ 1,75,000"
+    length_of_stay: str | None = None           # e.g., "18 days"
+
     # ── Extended clinical details ───────────────────────────────────────────────
 
     # Donor information (transplant cases)
@@ -174,6 +193,23 @@ WARD / BED RULES:
 - bed_number: the room/bed number only (e.g. "2306", "Bed 5")
 - If they appear combined (e.g. "2306(DR SHAILENDER WING SINGLE ROOMS)") split them correctly
 
+SCHEME / COVERAGE RULES:
+- Indian hospital admissions are usually billed against a government scheme (PM-JAY /
+  Ayushman Bharat, CGHS, ESI, CMCHIS, state schemes) or private insurance.
+- scheme_name: name as written (e.g. "PM-JAY", "Ayushman Bharat PM-JAY", "CGHS", "ESI", "Private").
+- pmjay_beneficiary_id: for PM-JAY this is the family/household/card number (e.g.
+  "P21449008733112"); for CGHS use the CGHS card number; for ESI the ESI/IP number.
+- pmjay_preauth_number: pre-authorisation / approval reference number, exactly as written.
+- hbp_package_code: PM-JAY HBP package code (e.g. "MG-SE-31"); leave null for non-PMJAY.
+- hbp_procedure_code: PM-JAY HBP procedure code within the package; leave null for non-PMJAY.
+- pmjay_hid_card_number: 14-digit ABHA / Health ID — usually the same value as abha_id.
+- medco_name: PM-JAY Medical Coordinator name, when explicitly mentioned.
+- implants_consumables: list of implants/consumables (with code/cost where given), or "None"
+  when explicitly documented as none used.
+- package_cost_approved: approved amount as written (preserve currency symbol — e.g. "₹ 1,75,000").
+- length_of_stay: total stay (e.g. "18 days"), or compute from admission_date → discharge_date.
+- NEVER invent any scheme identifier. If absent or unclear, return null for that field.
+
 DISCHARGE ADVICE RULES:
 - follow_up_instructions: the review/follow-up appointment instruction (e.g. "Review after 14 days with FBS, PPBS")
 - discharge_advice: list of specific behavioural/care instructions given at discharge
@@ -225,6 +261,17 @@ REQUIRED JSON SCHEMA:
   "surgeon": null,
   "anesthetist": null,
 
+  "scheme_name": null,
+  "pmjay_beneficiary_id": null,
+  "pmjay_preauth_number": null,
+  "hbp_package_code": null,
+  "hbp_procedure_code": null,
+  "pmjay_hid_card_number": null,
+  "medco_name": null,
+  "implants_consumables": null,
+  "package_cost_approved": null,
+  "length_of_stay": null,
+
   "donor_details": {
     "name": null, "age": null, "gender": null,
     "blood_group": null, "relation": null, "ip_number": null
@@ -274,6 +321,11 @@ _REQUIRED_KEYS = {
     "comorbidities", "hospital_course", "operative_details",
     "post_operative_course", "imaging", "serology",
     "blood_group", "urine_findings",
+    # Scheme / coverage metadata (ISS-006)
+    "scheme_name", "pmjay_beneficiary_id", "pmjay_preauth_number",
+    "hbp_package_code", "hbp_procedure_code", "pmjay_hid_card_number",
+    "medco_name", "implants_consumables", "package_cost_approved",
+    "length_of_stay",
 }
 
 
@@ -529,6 +581,11 @@ _SCALAR_FIRST: frozenset[str] = frozenset({
     "temperature", "oxygen_saturation", "weight", "height",
     "follow_up_instructions", "follow_up_date", "diet_advice", "allergies",
     "consultant", "surgeon", "anesthetist", "blood_group",
+    # Scheme / coverage metadata (ISS-006) — first-non-null across chunks
+    "scheme_name", "pmjay_beneficiary_id", "pmjay_preauth_number",
+    "hbp_package_code", "hbp_procedure_code", "pmjay_hid_card_number",
+    "medco_name", "implants_consumables", "package_cost_approved",
+    "length_of_stay",
 })
 # Narrative accumulated across chunks (dedup, joined).
 _ACCUMULATE_TEXT: frozenset[str] = frozenset({"hospital_course"})
