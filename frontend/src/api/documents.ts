@@ -224,6 +224,26 @@ export async function fetchDocumentStatus(
   return data
 }
 
+/** Re-run OCR on the stored file (recovery from `ocr_failed`). */
+export async function reprocessDocument(
+  documentId: string,
+): Promise<DocumentStatusPayload> {
+  const { data } = await api.post<DocumentStatusPayload>(
+    `/documents/${documentId}/reprocess`,
+  )
+  return data
+}
+
+/** Re-run LLM extraction on existing OCR text (recovery from `ready`/`ocr_complete`). */
+export async function reextractDocument(
+  documentId: string,
+): Promise<DocumentStatusPayload> {
+  const { data } = await api.post<DocumentStatusPayload>(
+    `/documents/${documentId}/reextract`,
+  )
+  return data
+}
+
 export async function fetchStructuredData(
   documentId: string,
 ): Promise<StructuredDataResponse> {

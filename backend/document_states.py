@@ -85,24 +85,30 @@ EDITABLE_STRUCTURED: frozenset[str] = frozenset({
     DocumentState.CONFIRMED,
 })
 
-#: Summary generation may be triggered from these source states
-#: (CONFIRMED = first run; GENERATED = regenerate after edits).
+#: Summary generation may be triggered from these source states.
+#: CONFIRMED = first run; GENERATED = regenerate after edits; FAILED =
+#: recover from a permanent generation failure (data stays confirmed, so
+#: re-running generation is the correct recovery — without this a failed
+#: generation would strand the document with no path forward).
 GENERATABLE: frozenset[str] = frozenset({
     DocumentState.CONFIRMED,
     DocumentState.GENERATED,
-})
-
-#: OCR may be re-run (full pipeline restart) only from these states.
-REPROCESSABLE: frozenset[str] = frozenset({
-    DocumentState.OCR_FAILED,
     DocumentState.FAILED,
 })
 
-#: LLM extraction may be re-run (without re-uploading the file) from these.
+#: OCR may be re-run (full pipeline restart from the stored file) only when
+#: OCR itself permanently failed. Extraction failures do NOT come here —
+#: they land in READY with empty data and are recovered via reextract.
+REPROCESSABLE: frozenset[str] = frozenset({
+    DocumentState.OCR_FAILED,
+})
+
+#: LLM extraction may be re-run (no re-upload) from these. READY covers a
+#: poor/empty extraction the doctor wants to retry; OCR_COMPLETE covers an
+#: extraction that never started (e.g. worker lost between OCR and extract).
 REEXTRACTABLE: frozenset[str] = frozenset({
     DocumentState.READY,
     DocumentState.OCR_COMPLETE,
-    DocumentState.FAILED,
 })
 
 

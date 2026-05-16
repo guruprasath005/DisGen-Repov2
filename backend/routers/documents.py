@@ -70,7 +70,11 @@ from document_states import (
     DocumentState,
     EDITABLE_STRUCTURED,
     GENERATABLE,
+    REPROCESSABLE,
+    REEXTRACTABLE,
     can_generate,
+    can_reextract,
+    can_reprocess,
     state_machine_contract,
 )
 from llm.extractor import StructuredData
@@ -881,6 +885,143 @@ async def delete_document(
         )
     )
     await db.commit()
+
+
+# ── POST /documents/{id}/reprocess — manual OCR recovery ──────────────────────
+
+
+@router.post(
+    "/{document_id}/reprocess",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=StatusResponse,
+)
+async def reprocess_document(
+    document_id: uuid.UUID,
+    request: Request,
+    _rl: None = RateLimiter("reprocess", limit=5),
+    user: User = Depends(require_role("doctor")),
+    db: AsyncSession = Depends(get_db),
+) -> StatusResponse:
+    """
+    Re-run the OCR pipeline on the already-stored file.
+
+    Doctor only — must own the document. Only valid when OCR permanently
+    failed (status `ocr_failed`); the file is still in MinIO so no re-upload
+    is needed. Resets status to `processing` and re-enqueues the OCR task;
+    the rest of the pipeline (extract → ready) then proceeds normally.
+    """
+    doc = await _fetch_doc(document_id, user, db)
+
+    if not can_reprocess(doc.status):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot reprocess from status '{doc.status}'. "
+                f"Allowed source statuses: {sorted(REPROCESSABLE)}"
+            ),
+        )
+
+    doc.status = DocumentState.PROCESSING
+    disgen_document_status_total.labels(status="processing").inc()
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            username=user.username,
+            role=user.role,
+            action="REPROCESS",
+            document_id=document_id,
+            ip_address=_client_ip(request),
+            user_agent=request.headers.get("User-Agent"),
+            details={"previous_status": DocumentState.OCR_FAILED},
+        )
+    )
+    await db.commit()
+
+    process_document.delay(str(document_id))
+
+    return StatusResponse(document_id=str(document_id), status=DocumentState.PROCESSING)
+
+
+# ── POST /documents/{id}/reextract — manual extraction recovery ───────────────
+
+
+@router.post(
+    "/{document_id}/reextract",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=StatusResponse,
+)
+async def reextract_document(
+    document_id: uuid.UUID,
+    request: Request,
+    _rl: None = RateLimiter("reextract", limit=5),
+    user: User = Depends(require_role("doctor")),
+    db: AsyncSession = Depends(get_db),
+) -> StatusResponse:
+    """
+    Re-run LLM extraction on the existing OCR text — no re-upload, no re-OCR.
+
+    Doctor only — must own the document. Valid from `ready` (retry a poor or
+    empty extraction) or `ocr_complete` (extraction never started). Because a
+    fresh extraction replaces the structured data, any prior confirmation is
+    invalidated: data_confirmed is reset and the document must be re-confirmed
+    before a summary can be generated.
+
+    Status is set to `ocr_complete` so the extraction task's idempotency
+    guard admits the re-run; it then advances extracting → ready as usual.
+    """
+    doc = await _fetch_doc(document_id, user, db)
+
+    if not can_reextract(doc.status):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot reextract from status '{doc.status}'. "
+                f"Allowed source statuses: {sorted(REEXTRACTABLE)}"
+            ),
+        )
+
+    if not doc.ocr_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No OCR text on file — run reprocess (re-OCR) instead",
+        )
+
+    # A new extraction supersedes any confirmed data — force re-confirmation.
+    report = (
+        await db.execute(
+            select(StructuredReport).where(
+                StructuredReport.document_id == document_id
+            )
+        )
+    ).scalar_one_or_none()
+    if report is not None and report.data_confirmed:
+        report.data_confirmed = False
+        report.confirmed_by = None
+        report.confirmed_at = None
+
+    previous_status = doc.status
+    doc.status = DocumentState.OCR_COMPLETE
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            username=user.username,
+            role=user.role,
+            action="REEXTRACT",
+            document_id=document_id,
+            ip_address=_client_ip(request),
+            user_agent=request.headers.get("User-Agent"),
+            details={"previous_status": previous_status},
+        )
+    )
+    await db.commit()
+
+    from tasks.extract_tasks import extract_structured_data  # noqa: PLC0415
+
+    extract_structured_data.delay(str(document_id))
+
+    return StatusResponse(
+        document_id=str(document_id), status=DocumentState.OCR_COMPLETE
+    )
 
 
 # ── POST /documents/{id}/generate ──────────────────────────────────────────────
