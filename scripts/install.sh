@@ -664,6 +664,14 @@ upgrade() {
         warn "docker compose pull skipped (offline or no updates)"
 
     start_docker
+
+    # Force-recreate nginx so it re-binds to the freshly-rebuilt frontend/dist.
+    # Without this, the nginx container can keep a bind-mount pointing at the
+    # now-deleted-and-recreated dist inode and serve an empty directory (403).
+    step "Re-attaching nginx to the rebuilt frontend/dist"
+    (cd "$PROJECT_ROOT" && docker compose up -d --force-recreate nginx 2>&1 | tail -1) || \
+        warn "nginx recreate skipped"
+
     wait_for_services
     run_migrations
 
