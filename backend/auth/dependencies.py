@@ -25,6 +25,7 @@ _bearer = HTTPBearer()
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
+    _allow_scope: str | None = None,
 ) -> User:
     token = credentials.credentials
     try:
@@ -34,6 +35,14 @@ async def get_current_user(
 
     if payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an access token")
+
+    # Reject scoped tokens (e.g. totp-setup) on regular endpoints — default deny
+    token_scope = payload.get("scope")
+    if token_scope and token_scope != _allow_scope:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Setup token cannot be used for regular requests",
+        )
 
     jti = payload.get("jti")
     if not jti or await is_blacklisted(jti):
@@ -50,6 +59,36 @@ async def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
+    return user
+
+
+async def get_setup_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Dependency that accepts only totp-setup scoped tokens."""
+    token = credentials.credentials
+    try:
+        payload = decode_token(token)
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    if payload.get("type") != "access" or payload.get("scope") != "totp-setup":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Setup token required")
+
+    jti = payload.get("jti")
+    if not jti or await is_blacklisted(jti):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed token")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
     return user
 
 

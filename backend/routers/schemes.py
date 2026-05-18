@@ -30,6 +30,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from audit import create_audit_log
 from auth.dependencies import get_current_user, require_role
 from auth.service import client_ip as _client_ip
 from database import get_db
@@ -201,7 +202,7 @@ def _index_rag(scheme_id: str, rag_chunks: list[str], rules: list[str]) -> None:
         )
 
 
-def _add_audit(
+async def _add_audit(
     db: AsyncSession,
     *,
     user: User,
@@ -209,16 +210,15 @@ def _add_audit(
     request: Request,
     details: dict,
 ) -> None:
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action=action,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details=details,
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action=action,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details=details,
     )
 
 
@@ -266,7 +266,7 @@ async def create_custom_scheme(
         created_by=user.id,
     )
     db.add(scheme)
-    _add_audit(
+    await _add_audit(
         db,
         user=user,
         action="SCHEME_CREATE",
@@ -327,7 +327,7 @@ async def update_custom_scheme(
     scheme.pdf_sections = body.pdf_sections
     # pdf_template stays "custom.html" — not user-settable
 
-    _add_audit(
+    await _add_audit(
         db,
         user=user,
         action="SCHEME_UPDATE",
@@ -365,7 +365,7 @@ async def delete_custom_scheme(
     scheme = await _fetch_custom_scheme(db, scheme_id)
     scheme_name = scheme.name
 
-    _add_audit(
+    await _add_audit(
         db,
         user=user,
         action="SCHEME_DELETE",

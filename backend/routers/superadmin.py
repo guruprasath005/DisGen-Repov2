@@ -38,6 +38,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from audit import create_audit_log
 from auth.dependencies import require_role
 from auth.password import hash_password
 from auth.service import (
@@ -254,7 +255,7 @@ async def _fetch_user(db: AsyncSession, user_id: uuid.UUID) -> User:
     return user
 
 
-def _add_audit(
+async def _add_audit(
     db: AsyncSession,
     *,
     actor: User,
@@ -263,7 +264,8 @@ def _add_audit(
     target_user_id: uuid.UUID | None = None,
     details: dict,
 ) -> None:
-    db.add(AuditLog(
+    await create_audit_log(
+        db,
         user_id=actor.id,
         username=actor.username,
         role=actor.role,
@@ -272,7 +274,7 @@ def _add_audit(
         ip_address=_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
         details=details,
-    ))
+    )
 
 
 def _hospital_to_response(cfg: HospitalConfig) -> HospitalConfigResponse:
@@ -384,7 +386,7 @@ async def create_user(
     db.add(new_user)
     await db.flush()  # materialise PK before audit FK
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="USER_CREATE",
@@ -454,7 +456,7 @@ async def update_user(
     if not changes:
         return _user_to_response(target)
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="SETTINGS_CHANGE",
@@ -498,7 +500,7 @@ async def deactivate_user(
         return _user_to_response(target)
 
     target.is_active = False
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="USER_DEACTIVATE",
@@ -537,7 +539,7 @@ async def activate_user(
     target.failed_attempts = 0
     target.locked_until = None
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="SETTINGS_CHANGE",
@@ -571,7 +573,7 @@ async def reset_password(
     target.failed_attempts = 0
     target.locked_until = None
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="SETTINGS_CHANGE",
@@ -626,7 +628,7 @@ async def revoke_user_sessions(
 
     revoked = await revoke_all_sessions(str(target_id))
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="SETTINGS_CHANGE",
@@ -689,7 +691,7 @@ async def update_hospital_config(
     cfg.pdf_accent_color = body.pdf_accent_color
     cfg.updated_at = datetime.now(timezone.utc)
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="SETTINGS_CHANGE",
@@ -749,7 +751,7 @@ async def update_retention_settings(
     cfg.anonymize_on_expiry = body.anonymize_on_expiry
     cfg.updated_at = datetime.now(timezone.utc)
 
-    _add_audit(
+    await _add_audit(
         db,
         actor=actor,
         action="SETTINGS_CHANGE",

@@ -32,6 +32,7 @@ Structured data update:
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import hashlib
 import io
@@ -57,6 +58,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from audit import create_audit_log
 from auth.dependencies import get_current_user, require_role
 from middleware.rate_limit import RateLimiter
 from compliance.abha import abha_error_message, validate_abha_id
@@ -300,6 +302,11 @@ async def _fetch_doc(
     if doc is None or doc.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
+    # Tenant isolation guard (Option A) — canary assert, not expected to fire.
+    # If it does, a bug allowed cross-tenant data to appear in this deployment.
+    if doc.hospital_id and doc.hospital_id != settings.hospital_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
     if user.role == "doctor" and doc.uploaded_by != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
@@ -439,29 +446,28 @@ async def upload_document(
     db.add(
         ConsentRecord(
             document_id=doc_id,
-            patient_name=patient_name,
+            patient_name=encrypt(patient_name),
             consent_given=consent_given,
             consent_method=consent_method,
             consent_date=consent_date or date.today(),
             recorded_by=user.id,
         )
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="UPLOAD",
-            document_id=doc_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={
-                "filename": safe_name,
-                "size_bytes": len(file_bytes),
-                "mime_type": detected_mime,
-                "sha256": sha256,
-            },
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="UPLOAD",
+        document_id=doc_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={
+            "filename": safe_name,
+            "size_bytes": len(file_bytes),
+            "mime_type": detected_mime,
+            "sha256": sha256,
+        },
     )
     await db.commit()
 
@@ -737,21 +743,20 @@ async def update_structured_data(
         disgen_document_status_total.labels(status="ready").inc()
         reconfirm_required = True
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="STRUCTURED_UPDATE",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={
-                "fields_updated": updated_keys,
-                "new_version": report.version,
-                "reconfirm_required": reconfirm_required,
-            },
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="STRUCTURED_UPDATE",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={
+            "fields_updated": updated_keys,
+            "new_version": report.version,
+            "reconfirm_required": reconfirm_required,
+        },
     )
     await db.commit()
     await db.refresh(report)
@@ -819,17 +824,16 @@ async def confirm_structured_data(
         doc.status = "confirmed"
         disgen_document_status_total.labels(status="confirmed").inc()
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="STRUCTURED_CONFIRM",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={"version": report.version},
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="STRUCTURED_CONFIRM",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"version": report.version},
     )
     await db.commit()
     await db.refresh(report)
@@ -873,17 +877,16 @@ async def delete_document(
 
     doc.deleted_at = datetime.now(timezone.utc)
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="DOCUMENT_DELETE",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={"previous_status": doc.status},
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="DOCUMENT_DELETE",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"previous_status": doc.status},
     )
     await db.commit()
 
@@ -924,17 +927,16 @@ async def reprocess_document(
 
     doc.status = DocumentState.PROCESSING
     disgen_document_status_total.labels(status="processing").inc()
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="REPROCESS",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={"previous_status": DocumentState.OCR_FAILED},
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="REPROCESS",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"previous_status": DocumentState.OCR_FAILED},
     )
     await db.commit()
 
@@ -1002,17 +1004,16 @@ async def reextract_document(
 
     previous_status = doc.status
     doc.status = DocumentState.OCR_COMPLETE
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="REEXTRACT",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={"previous_status": previous_status},
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="REEXTRACT",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"previous_status": previous_status},
     )
     await db.commit()
 
@@ -1082,17 +1083,16 @@ async def trigger_generation(
         )
 
     doc.status = "generating"
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="GENERATE",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={"scheme_id": body.scheme_id, "trigger": "user_initiated"},
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="GENERATE",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"scheme_id": body.scheme_id, "trigger": "user_initiated"},
     )
     await db.commit()
 
@@ -1232,22 +1232,21 @@ async def update_summary_fields(
     summary.summary_fields = merged
     summary.validation_notes = result.notes
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="FIELD_EDIT",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={
-                "summary_id": str(summary.id),
-                "scheme": summary.scheme,
-                "fields_updated": list(body.fields.keys()),
-                "missing_required": result.notes.get("empty_required_fields", []),
-            },
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="FIELD_EDIT",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={
+            "summary_id": str(summary.id),
+            "scheme": summary.scheme,
+            "fields_updated": list(body.fields.keys()),
+            "missing_required": result.notes.get("empty_required_fields", []),
+        },
     )
     await db.commit()
     await db.refresh(summary)
@@ -1357,7 +1356,9 @@ async def download_latest_summary_pdf(
     from pdf.renderer import render_pdf, safe_pdf_filename
 
     try:
-        pdf_bytes = render_pdf(
+        # WeasyPrint is CPU-bound and synchronous — offload so it doesn't block the event loop
+        pdf_bytes = await asyncio.to_thread(
+            render_pdf,
             summary_fields=summary.summary_fields,
             summary_text=summary_text,
             structured_data=structured_data,
@@ -1376,23 +1377,22 @@ async def download_latest_summary_pdf(
 
     filename = safe_pdf_filename(structured_data, summary.scheme, summary.version)
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="PDF_DOWNLOAD",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={
-                "summary_id": str(summary.id),
-                "scheme": summary.scheme,
-                "version": summary.version,
-                "summary_status": summary.status,
-                "bytes": len(pdf_bytes),
-            },
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="PDF_DOWNLOAD",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={
+            "summary_id": str(summary.id),
+            "scheme": summary.scheme,
+            "version": summary.version,
+            "summary_status": summary.status,
+            "bytes": len(pdf_bytes),
+        },
     )
     await db.commit()
 
@@ -1498,21 +1498,20 @@ async def approve_latest_summary(
         doc.status = "approved"
         disgen_document_status_total.labels(status="approved").inc()
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="APPROVE",
-            document_id=document_id,
-            ip_address=_client_ip(request),
-            user_agent=request.headers.get("User-Agent"),
-            details={
-                "summary_id": str(summary.id),
-                "scheme": summary.scheme,
-                "version": summary.version,
-            },
-        )
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="APPROVE",
+        document_id=document_id,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={
+            "summary_id": str(summary.id),
+            "scheme": summary.scheme,
+            "version": summary.version,
+        },
     )
     await db.commit()
     await db.refresh(summary)

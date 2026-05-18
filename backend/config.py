@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # ── Field Encryption (AES-256-GCM) ────────────────────────────────────────
     # Must be exactly 32 bytes, base64-encoded. Generate: openssl rand -base64 32
     field_encryption_key: str = "changeme-must-be-32-bytes-base64="
+    # Key versioning for rotation. Increment KEY_ID and move old key to KEYS_OLD.
+    field_encryption_key_id: str = "1"
+    field_encryption_keys_old: str = "{}"  # JSON: {"<old_id>": "<old_b64_key>"}
 
     # ── Auth JWT ──────────────────────────────────────────────────────────────
     jwt_private_key_path: str = "/app/auth/keys/private.pem"
@@ -83,6 +86,13 @@ class Settings(BaseSettings):
     # ── Celery ────────────────────────────────────────────────────────────────
     celery_broker_url: str = "redis://:changeme@redis:6379/1"
     celery_result_backend: str = "redis://:changeme@redis:6379/2"
+
+    # ── TOTP / MFA ────────────────────────────────────────────────────────────
+    admin_require_totp: bool = True
+    doctor_require_totp: bool = False
+
+    # ── PHI De-identification ─────────────────────────────────────────────────
+    phi_llm_prepass_enabled: bool = False  # optional LLM sweep, requires in-India provider
 
     # ── DPDP / Compliance ─────────────────────────────────────────────────────
     data_retention_days: int = 2555

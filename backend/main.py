@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import secrets
 from contextlib import asynccontextmanager
 
@@ -76,9 +77,12 @@ def _make_metrics_app():
     return make_asgi_app()
 
 
+_PLACEHOLDER_PATTERNS = re.compile(r"changeme|dummy|your[-_]|example|replace.?me", re.IGNORECASE)
+
+
 def _assert_secret(value: str, name: str, hint: str = "") -> None:
-    if "changeme" in value.lower():
-        msg = f"{name} is still the placeholder default — set a real value before deploying"
+    if not value or _PLACEHOLDER_PATTERNS.search(value):
+        msg = f"[BOOT GUARD] {name} contains a placeholder value — set a real secret before deploying"
         if hint:
             msg += f" ({hint})"
         raise RuntimeError(msg)
@@ -93,6 +97,29 @@ async def lifespan(app: FastAPI):
     _assert_secret(settings.minio_secret_key, "MINIO_SECRET_KEY")
     _assert_secret(settings.minio_access_key, "MINIO_ACCESS_KEY")
     _assert_secret(settings.celery_broker_url, "CELERY_BROKER_URL")
+
+    # Check OpenAI key if that provider is active
+    if settings.llm_provider == "openai" and settings.openai_api_key:
+        _assert_secret(settings.openai_api_key, "OPENAI_API_KEY")
+
+    # Azure OCR key
+    if settings.azure_document_key:
+        _assert_secret(settings.azure_document_key, "AZURE_DOCUMENT_KEY")
+
+    # Verify JWT key files contain real PEM content, not placeholder text
+    for path_attr, label in [
+        ("jwt_private_key_path", "JWT_PRIVATE_KEY"),
+        ("jwt_public_key_path", "JWT_PUBLIC_KEY"),
+    ]:
+        path = getattr(settings, path_attr)
+        try:
+            content = open(path).read()
+            if _PLACEHOLDER_PATTERNS.search(content) or "BEGIN RSA" not in content:
+                raise RuntimeError(
+                    f"[BOOT GUARD] {label} at {path} does not look like a real RSA PEM key"
+                )
+        except FileNotFoundError:
+            raise RuntimeError(f"[BOOT GUARD] {label} file not found at {path}")
 
     # ── DPDP data-residency guard ─────────────────────────────────────────────
     # Refuse to boot silently with a non-compliant LLM provider. We do not hard
@@ -200,6 +227,7 @@ async def request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", os.urandom(8).hex())
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Hospital-ID"] = settings.hospital_id
     return response
 
 
@@ -216,6 +244,7 @@ def health():
         "llm_provider": llm_name,
         "llm_data_residency": residency,
         "dpdp_compliant": compliant,
+        "dpdp_phi_deidentified": True,
     }
 
 

@@ -36,6 +36,7 @@ from crypto import decrypt, encrypt
 from database import task_db
 from llm.generator import generate_scheme_fields as llm_generate_scheme_fields
 from llm.validator import validate_fields
+from audit import create_audit_log
 from models.audit import AuditLog
 from models.document import Document
 from models.scheme import GeneratedSummary, Scheme
@@ -44,6 +45,7 @@ from metrics import (
     disgen_document_status_total,
     disgen_generation_duration_seconds,
 )
+from nlp.reidentify import reidentify
 from tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -130,6 +132,7 @@ async def _pipeline(
 
             # Snapshot fields needed outside the session
             encrypted_data: str = report.data
+            encrypted_phi_map: str | None = report.phi_map
             scheme_name: str = scheme.name
             scheme_required_fields: list = list(scheme.required_fields or [])
             scheme_optional_fields: list = list(scheme.optional_fields or [])
@@ -140,12 +143,39 @@ async def _pipeline(
 
         structured_data: dict = json.loads(decrypt(encrypted_data))
 
+        # ── 3b. De-identify before LLM call ───────────────────────────────────
+        # Reuse the phi_map built during extraction. We serialize the structured
+        # dict, swap real PHI values for their placeholders, then send the
+        # de-identified dict to the LLM. After the LLM returns, we re-identify
+        # before persisting so the DB still stores real patient data.
+        phi_map: dict[str, str] = {}
+        if encrypted_phi_map:
+            try:
+                phi_map = json.loads(decrypt(encrypted_phi_map))
+            except Exception as exc:
+                logger.warning(
+                    "Generate task: phi_map decrypt failed for %s — proceeding "
+                    "without de-identification: %s", document_id, exc,
+                )
+                phi_map = {}
+
+        if phi_map:
+            data_json = json.dumps(structured_data, ensure_ascii=False)
+            # Replace longer values first to avoid partial-substring conflicts
+            for placeholder in sorted(phi_map, key=lambda k: len(phi_map[k]), reverse=True):
+                value = phi_map[placeholder]
+                if value:
+                    data_json = data_json.replace(value, placeholder)
+            structured_data_clean = json.loads(data_json)
+        else:
+            structured_data_clean = structured_data
+
         # ── 4. LLM field extraction ───────────────────────────────────────────
         try:
             _gen_start = time.monotonic()
             summary_fields: dict = await asyncio.to_thread(
                 llm_generate_scheme_fields,
-                structured_data=structured_data,
+                structured_data=structured_data_clean,
                 scheme_id=scheme_id,
                 scheme_name=scheme_name,
                 required_fields=scheme_required_fields,
@@ -153,6 +183,12 @@ async def _pipeline(
                 hospital_name=settings.hospital_name,
             )
             disgen_generation_duration_seconds.observe(time.monotonic() - _gen_start)
+
+            # Re-identify: replace placeholders back with real PHI before persist
+            if phi_map and summary_fields:
+                fields_json = json.dumps(summary_fields, ensure_ascii=False)
+                fields_json = reidentify(fields_json, phi_map)
+                summary_fields = json.loads(fields_json)
         except Exception as exc:
             logger.error(
                 "Field generation failed document=%s scheme=%s: %s",
@@ -225,22 +261,21 @@ async def _pipeline(
             disgen_document_status_total.labels(status="generated").inc()
 
             missing_fields = result.notes.get("empty_required_fields", [])
-            db.add(
-                AuditLog(
-                    user_id=user_uuid,
-                    username="system",
-                    role="system",
-                    action="GENERATE",
-                    document_id=doc_uuid,
-                    ip_address="127.0.0.1",
-                    details={
-                        "scheme_id": scheme_id,
-                        "version": new_version,
-                        "fields_total": len(summary_fields),
-                        "fields_null": len(missing_fields),
-                        "missing_required": missing_fields,
-                    },
-                )
+            await create_audit_log(
+                db,
+                user_id=user_uuid,
+                username="system",
+                role="system",
+                action="GENERATE",
+                document_id=doc_uuid,
+                ip_address="127.0.0.1",
+                details={
+                    "scheme_id": scheme_id,
+                    "version": new_version,
+                    "fields_total": len(summary_fields),
+                    "fields_null": len(missing_fields),
+                    "missing_required": missing_fields,
+                },
             )
             summary_id = str(gs.id)
             await db.commit()
@@ -278,16 +313,15 @@ async def _write_failure_audit(
     Record a GENERATE_FAILED audit entry. Caller is responsible for commit()
     so this can be composed with other DB writes in the same transaction.
     """
-    db.add(
-        AuditLog(
-            user_id=user_uuid,
-            username="system",
-            role="system",
-            action="GENERATE_FAILED",
-            document_id=doc_uuid,
-            ip_address="127.0.0.1",
-            details={"scheme_id": scheme_id, "reason": reason},
-        )
+    await create_audit_log(
+        db,
+        user_id=user_uuid,
+        username="system",
+        role="system",
+        action="GENERATE_FAILED",
+        document_id=doc_uuid,
+        ip_address="127.0.0.1",
+        details={"scheme_id": scheme_id, "reason": reason},
     )
 
 

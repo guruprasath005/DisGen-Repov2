@@ -32,6 +32,7 @@ from sqlalchemy import cast, func, select, text
 from sqlalchemy.types import Date as SADate
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from audit import create_audit_log, verify_audit_chain
 from auth.dependencies import get_current_user, require_role
 from auth.password import hash_password
 from auth.service import client_ip as _client_ip
@@ -545,7 +546,8 @@ async def create_doctor(
     db.add(new_user)
     await db.flush()  # materialise PK before audit log FK
 
-    db.add(AuditLog(
+    await create_audit_log(
+        db,
         user_id=user.id,
         username=user.username,
         role=user.role,
@@ -554,7 +556,7 @@ async def create_doctor(
         ip_address=_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
         details={"created_username": body.username, "role": "doctor"},
-    ))
+    )
     await db.commit()
     await db.refresh(new_user)
 
@@ -603,7 +605,8 @@ async def deactivate_doctor(
 
     target.is_active = False
 
-    db.add(AuditLog(
+    await create_audit_log(
+        db,
         user_id=user.id,
         username=user.username,
         role=user.role,
@@ -612,9 +615,18 @@ async def deactivate_doctor(
         ip_address=_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
         details={"deactivated_username": target.username},
-    ))
+    )
     await db.commit()
     await db.refresh(target)
 
     logger.info("Doctor '%s' deactivated by admin '%s'", target.username, user.username)
     return _user_to_response(target)
+
+
+@router.get("/audit/verify", tags=["Admin"])
+async def audit_verify(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role("super_admin")),
+):
+    """Walk the audit hash chain and report the first broken entry."""
+    return await verify_audit_chain(db)

@@ -16,6 +16,7 @@ AuditAction = SAEnum(
     "SETTINGS_CHANGE", "RETENTION_ENFORCED",
     "ACCOUNT_LOCKED",
     "FIELD_EDIT",
+    "REPROCESS", "REEXTRACT",
     name="audit_action",
 )
 
@@ -35,3 +36,7 @@ class AuditLog(Base):
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
     details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    hospital_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    # Hash chain fields — set by audit.create_audit_log(), never set directly
+    prev_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hash: Mapped[str | None] = mapped_column(Text, nullable=True)

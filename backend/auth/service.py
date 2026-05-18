@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 import redis.asyncio as aioredis
 from fastapi import Request
 from jose import jwt
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from metrics import disgen_active_sessions
@@ -72,11 +74,13 @@ def create_access_token(user) -> str:
     return jwt.encode(payload, _private_key(), algorithm=ALGORITHM)
 
 
-def create_refresh_token(user) -> str:
+def create_refresh_token(user, family_id: uuid.UUID | None = None) -> str:
     now = datetime.now(timezone.utc)
+    fid = family_id or uuid.uuid4()
     payload = {
         "sub": str(user.id),
         "jti": str(uuid.uuid4()),
+        "family_id": str(fid),
         "type": "refresh",
         "iat": now,
         "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days),
@@ -198,3 +202,93 @@ async def revoke_all_sessions(user_id: str) -> int:
     if count > 0:
         disgen_active_sessions.dec(count)
     return count
+
+
+# ── TOTP setup token (Fix 5) ─────────────────────────────────────────────────
+
+
+def create_setup_token(user) -> str:
+    """Short-lived scoped JWT accepted only by the TOTP setup endpoints."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user.id),
+        "jti": str(uuid.uuid4()),
+        "type": "access",
+        "scope": "totp-setup",
+        "iat": now,
+        "exp": now + timedelta(minutes=10),
+    }
+    return jwt.encode(payload, _private_key(), algorithm=ALGORITHM)
+
+
+# ── DB-backed refresh token operations (Fix 4) ────────────────────────────────
+
+
+async def persist_refresh_token(
+    db: AsyncSession,
+    *,
+    jti: str,
+    user_id: uuid.UUID,
+    family_id: uuid.UUID,
+    expires_at: datetime,
+    created_ip: str | None = None,
+    created_ua: str | None = None,
+) -> None:
+    """Write a new refresh token record to the DB (authoritative store)."""
+    from models.refresh_token import RefreshToken
+
+    token = RefreshToken(
+        jti=uuid.UUID(jti),
+        user_id=user_id,
+        family_id=family_id,
+        expires_at=expires_at,
+        created_ip=created_ip,
+        created_ua=created_ua,
+    )
+    db.add(token)
+    await db.flush()
+
+
+async def revoke_family(
+    db: AsyncSession,
+    family_id: uuid.UUID,
+    reason: str = "reuse",
+) -> int:
+    """
+    Revoke every non-revoked token in a refresh token family.
+
+    On reuse detection only the compromised login session is killed, not all
+    user sessions. Returns the number of tokens revoked.
+    """
+    from models.refresh_token import RefreshToken
+
+    result = await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.family_id == family_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(
+            revoked_at=datetime.now(timezone.utc),
+            revoke_reason=reason,
+        )
+        .returning(RefreshToken.jti, RefreshToken.expires_at)
+    )
+    rows = result.fetchall()
+    for jti, exp in rows:
+        await blacklist_token(str(jti), int(exp.timestamp()))
+    return len(rows)
+
+
+async def is_token_revoked_in_db(db: AsyncSession, jti: str) -> bool:
+    """Authoritative DB check — used when Redis cache misses."""
+    from sqlalchemy import select
+    from models.refresh_token import RefreshToken
+
+    result = await db.execute(
+        select(RefreshToken.revoked_at).where(RefreshToken.jti == uuid.UUID(jti))
+    )
+    row = result.fetchone()
+    if row is None:
+        return True  # not found in DB — treat as revoked (fail closed)
+    return row[0] is not None

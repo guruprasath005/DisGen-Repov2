@@ -32,6 +32,7 @@ from celery.exceptions import MaxRetriesExceededError
 from minio.error import S3Error
 from sqlalchemy import select
 
+from audit import create_audit_log
 from config import settings
 from crypto import encrypt
 from database import task_db
@@ -151,7 +152,8 @@ async def _pipeline(task: Task, document_id: str) -> dict:
             disgen_document_status_total.labels(status="ocr_complete").inc()
 
             # ── 5. Audit entry ─────────────────────────────────────────────────
-            audit = AuditLog(
+            await create_audit_log(
+                db,
                 user_id=uploaded_by,
                 username="system",
                 role="system",
@@ -166,7 +168,6 @@ async def _pipeline(task: Task, document_id: str) -> dict:
                     "sections_extracted": len(ocr_result.sections),
                 },
             )
-            db.add(audit)
             await db.commit()
 
     logger.info(

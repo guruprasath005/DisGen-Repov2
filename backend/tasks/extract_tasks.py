@@ -44,9 +44,12 @@ from llm.extractor import (
     map_drug_names,
     map_icd10_codes,
 )
+from audit import create_audit_log
 from models.audit import AuditLog
 from models.document import Document
 from models.structured_report import StructuredReport
+from nlp.deidentify import deidentify
+from nlp.reidentify import reidentify
 from tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -118,12 +121,23 @@ async def _pipeline(task: Task, document_id: str) -> dict:
             doc.status = "extracting"
             await db.commit()
 
+        # ── 3b. De-identify OCR text before sending to LLM ────────────────────
+        # Replaces patient PHI with placeholders. Re-identification happens after
+        # LLM returns, before persisting. The DB never stores de-identified data.
+        full_text = ocr_data.get("full_text", "") or " ".join(
+            p.get("text", "") for p in ocr_data.get("pages", [])
+        )
+        deidentified_text, phi_replacements = deidentify(full_text)
+        # Inject de-identified text back so the LLM extractor receives clean text
+        ocr_data_clean = dict(ocr_data)
+        ocr_data_clean["full_text"] = deidentified_text
+
         # ── 4. LLM extraction + NLP fallback (synchronous, may take 10–60 s) ──
         # Run in a thread so the event loop remains free for any concurrent DB work.
         try:
             _extract_start = time.monotonic()
             structured: StructuredData = await asyncio.to_thread(
-                extract_structured, ocr_data
+                extract_structured, ocr_data_clean
             )
             disgen_llm_extraction_duration_seconds.observe(time.monotonic() - _extract_start)
         except Exception as exc:
@@ -162,8 +176,18 @@ async def _pipeline(task: Task, document_id: str) -> dict:
         structured.medications_during_stay = mapped_stay_meds
         structured.discharge_medications = mapped_discharge_meds
 
+        # ── 6b. Re-identify — replace placeholders with real PHI before persist ─
+        # The structured dict may contain placeholder values if the LLM echoed them.
+        # Reidentify restores the originals so the DB always stores real patient data.
+        structured_dict = structured.to_dict()
+        structured_json = json.dumps(structured_dict, ensure_ascii=False)
+        structured_json = reidentify(structured_json, phi_replacements)
+
+        # Encrypt phi_map for storage (needed for generate task re-identification)
+        encrypted_phi_map = encrypt(json.dumps(phi_replacements, ensure_ascii=False)) if phi_replacements else None
+
         # ── 7–9. Persist, update status, audit ────────────────────────────────
-        encrypted_data = encrypt(json.dumps(structured.to_dict(), ensure_ascii=False))
+        encrypted_data = encrypt(structured_json)
 
         async with make_session() as db:
             # Upsert structured report (unique constraint on document_id)
@@ -175,12 +199,14 @@ async def _pipeline(task: Task, document_id: str) -> dict:
 
             if existing:
                 existing.data = encrypted_data
+                existing.phi_map = encrypted_phi_map
                 existing.version += 1
             else:
                 db.add(
                     StructuredReport(
                         document_id=doc_uuid,
                         data=encrypted_data,
+                        phi_map=encrypted_phi_map,
                         data_confirmed=False,
                         excluded_fields=[],
                         version=1,
@@ -194,25 +220,24 @@ async def _pipeline(task: Task, document_id: str) -> dict:
             disgen_document_status_total.labels(status="ready").inc()
 
             # Audit entry
-            db.add(
-                AuditLog(
-                    user_id=uploaded_by,
-                    username="system",
-                    role="system",
-                    action="EXTRACT_COMPLETE",
-                    document_id=doc_uuid,
-                    ip_address="127.0.0.1",
-                    details={
-                        "extraction_source": structured.extraction_source,
-                        "icd10_primary_auto": icd10_primary is not None,
-                        "icd10_primary_candidates": len(icd10_primary_candidates),
-                        "icd10_secondary_count": len(icd10_secondary),
-                        "medications_normalized": sum(
-                            1 for m in mapped_discharge_meds if m.get("normalized")
-                        ),
-                        "investigations_count": len(structured.investigations),
-                    },
-                )
+            await create_audit_log(
+                db,
+                user_id=uploaded_by,
+                username="system",
+                role="system",
+                action="EXTRACT_COMPLETE",
+                document_id=doc_uuid,
+                ip_address="127.0.0.1",
+                details={
+                    "extraction_source": structured.extraction_source,
+                    "icd10_primary_auto": icd10_primary is not None,
+                    "icd10_primary_candidates": len(icd10_primary_candidates),
+                    "icd10_secondary_count": len(icd10_secondary),
+                    "medications_normalized": sum(
+                        1 for m in mapped_discharge_meds if m.get("normalized")
+                    ),
+                    "investigations_count": len(structured.investigations),
+                },
             )
             await db.commit()
 
@@ -277,16 +302,15 @@ async def _store_empty_and_ready(
             if doc:
                 doc.status = "ready"
 
-            db.add(
-                AuditLog(
-                    user_id=uploaded_by,
-                    username="system",
-                    role="system",
-                    action="EXTRACT_COMPLETE",
-                    document_id=doc_uuid,
-                    ip_address="127.0.0.1",
-                    details={"extraction_source": "failed", "reason": reason},
-                )
+            await create_audit_log(
+                db,
+                user_id=uploaded_by,
+                username="system",
+                role="system",
+                action="EXTRACT_COMPLETE",
+                document_id=doc_uuid,
+                ip_address="127.0.0.1",
+                details={"extraction_source": "failed", "reason": reason},
             )
             await db.commit()
     except Exception as db_exc:

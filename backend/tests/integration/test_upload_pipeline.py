@@ -66,7 +66,8 @@ async def test_upload_creates_consent_record(client, doctor_token, doctor_user, 
     assert consent is not None
     assert consent.consent_given is True
     assert consent.consent_method == "verbal"
-    assert consent.patient_name == "Jane Doe"
+    from crypto import safe_decrypt
+    assert safe_decrypt(consent.patient_name) == "Jane Doe"
 
 
 async def test_upload_writes_audit_log(client, doctor_token, doctor_user, db_session):

@@ -19,24 +19,27 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user
-from auth.password import verify_password
+from audit import create_audit_log
+from auth.dependencies import get_current_user, get_setup_user
+from auth.password import verify_password, needs_rehash, hash_password
 from auth.service import (
     blacklist_token,
     check_login_rate_limit,
     client_ip,
     create_access_token,
     create_refresh_token,
+    create_setup_token,
     decode_token,
     is_blacklisted,
+    persist_refresh_token,
     register_session,
     revoke_all_sessions,
+    revoke_family,
     try_blacklist_token,
     unregister_session,
 )
 from config import settings
 from database import get_db
-from models.audit import AuditLog
 from models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -52,6 +55,7 @@ _LOCKOUT_MAX_MINUTES = 1440  # 24 hours
 class LoginRequest(BaseModel):
     username: str
     password: str
+    totp_code: str | None = None  # required when user has TOTP enabled
 
 
 class TokenResponse(BaseModel):
@@ -140,30 +144,27 @@ async def login(
                 exp = user.failed_attempts - _LOCKOUT_ATTEMPTS
                 minutes = min(_LOCKOUT_BASE_MINUTES * (2 ** exp), _LOCKOUT_MAX_MINUTES)
                 user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-                db.add(
-                    AuditLog(
-                        user_id=user.id,
-                        username=user.username,
-                        role=user.role,
-                        action="ACCOUNT_LOCKED",
-                        ip_address=ip,
-                        user_agent=request.headers.get("User-Agent"),
-                        details={"failed_attempts": user.failed_attempts, "lockout_minutes": minutes},
-                    )
+                await create_audit_log(
+                    db,
+                    user_id=user.id,
+                    username=user.username,
+                    role=user.role,
+                    action="ACCOUNT_LOCKED",
+                    ip_address=ip,
+                    user_agent=request.headers.get("User-Agent"),
+                    details={"failed_attempts": user.failed_attempts, "lockout_minutes": minutes},
                 )
-        db.add(
-            AuditLog(
-                user_id=user.id if user else None,
-                username=body.username,
-                role=user.role if user else "unknown",
-                action="LOGIN_FAILED",
-                ip_address=ip,
-                user_agent=request.headers.get("User-Agent"),
-                details={"reason": fail_reason},
-            )
+        await create_audit_log(
+            db,
+            user_id=user.id if user else None,
+            username=body.username,
+            role=user.role if user else "unknown",
+            action="LOGIN_FAILED",
+            ip_address=ip,
+            user_agent=request.headers.get("User-Agent"),
+            details={"reason": fail_reason},
         )
         # Commit audit entry before raising — get_db will rollback an empty tx
-        await db.flush()
         await db.commit()
         disgen_auth_failures_total.inc()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -172,28 +173,66 @@ async def login(
     user.failed_attempts = 0
     user.locked_until = None
     user.last_login = datetime.now(timezone.utc)
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            action="LOGIN",
-            ip_address=ip,
-            user_agent=request.headers.get("User-Agent"),
-        )
+
+    # Lazy rehash: upgrade bcrypt hashes to argon2id on the next successful login
+    if needs_rehash(user.hashed_password):
+        user.hashed_password = hash_password(body.password)
+        user.password_algo = "argon2id"
+
+    # TOTP enforcement: if enabled (or role requires it), verify before issuing tokens
+    _role_requires_totp = (
+        (user.role in ("admin", "super_admin") and settings.admin_require_totp)
+        or (user.role == "doctor" and settings.doctor_require_totp)
+    )
+    if user.totp_enabled or _role_requires_totp:
+        if not user.totp_enabled:
+            # Role requires TOTP but user hasn't enrolled — return setup token
+            setup_token = create_setup_token(user)
+            await db.commit()
+            return TokenResponse(access_token=setup_token, refresh_token=None)
+        if not body.totp_code:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="TOTP code required",
+            )
+        from crypto import decrypt as _decrypt
+        from totp import verify_code as _verify_totp
+        secret = _decrypt(user.totp_secret)
+        if not _verify_totp(secret, body.totp_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid TOTP code",
+            )
+
+    await create_audit_log(
+        db,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        action="LOGIN",
+        ip_address=ip,
+        user_agent=request.headers.get("User-Agent"),
     )
 
+    family_id = uuid.uuid4()
     access_token = create_access_token(user)
-    refresh_token = create_refresh_token(user)
+    refresh_token = create_refresh_token(user, family_id=family_id)
     _set_refresh_cookie(response, refresh_token)
     _set_csrf_cookie(response)
 
-    # Track the new refresh token so Super Admin can enumerate/revoke sessions
     rp = decode_token(refresh_token)
+    # Persist to DB (authoritative) and Redis (fast-path cache)
+    await persist_refresh_token(
+        db,
+        jti=rp["jti"],
+        user_id=user.id,
+        family_id=family_id,
+        expires_at=datetime.fromtimestamp(rp["exp"], tz=timezone.utc),
+        created_ip=ip,
+        created_ua=request.headers.get("User-Agent"),
+    )
     await register_session(str(user.id), rp["jti"], rp["exp"])
 
-    # Return refresh token in body so mobile clients can store it in secure storage.
-    # Web clients use the httpOnly cookie and ignore this field.
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
@@ -220,14 +259,13 @@ async def refresh(
     jti = payload.get("jti")
     exp = payload.get("exp")
 
-    # Atomically check-and-blacklist. On reuse, revoke every session for this
-    # user — a reused token means either the client retried or the token was
-    # stolen; either way, force re-login for all sessions.
+    # Atomically check-and-blacklist via Redis. On reuse, revoke only the
+    # compromised family (not all sessions) — a specific login session was stolen.
     reuse_detected = await try_blacklist_token(jti, exp)
     if reuse_detected:
-        user_id_str = payload.get("sub", "")
-        if user_id_str:
-            await revoke_all_sessions(user_id_str)
+        family_id_str = payload.get("family_id")
+        if family_id_str:
+            await revoke_family(db, uuid.UUID(family_id_str), reason="reuse")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token already used")
 
     try:
@@ -240,15 +278,25 @@ async def refresh(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
+    # Carry the family_id forward through the rotation chain
+    family_id = uuid.UUID(payload["family_id"]) if payload.get("family_id") else uuid.uuid4()
     new_access = create_access_token(user)
-    new_refresh = create_refresh_token(user)
+    new_refresh = create_refresh_token(user, family_id=family_id)
     _set_refresh_cookie(response, new_refresh)
     _set_csrf_cookie(response)
 
-    # Rotate session tracking — remove old JTI, register the replacement
     user_id_str = payload["sub"]
     await unregister_session(user_id_str, jti)
     nrp = decode_token(new_refresh)
+    await persist_refresh_token(
+        db,
+        jti=nrp["jti"],
+        user_id=user.id,
+        family_id=family_id,
+        expires_at=datetime.fromtimestamp(nrp["exp"], tz=timezone.utc),
+        created_ip=client_ip(request),
+        created_ua=request.headers.get("User-Agent"),
+    )
     await register_session(user_id_str, nrp["jti"], nrp["exp"])
 
     return TokenResponse(access_token=new_access, refresh_token=new_refresh)
@@ -292,7 +340,8 @@ async def logout(
     response.delete_cookie(_CSRF_COOKIE, path="/")
 
     if audit_username:
-        db.add(AuditLog(
+        await create_audit_log(
+            db,
             user_id=audit_user_id,
             username=audit_username,
             role=audit_role or "unknown",
@@ -300,7 +349,7 @@ async def logout(
             ip_address=client_ip(request),
             user_agent=request.headers.get("User-Agent"),
             details={},
-        ))
+        )
         await db.commit()
 
 
@@ -314,3 +363,59 @@ async def me(user: User = Depends(get_current_user)):
         role=user.role,
         hospital_id=settings.hospital_id,
     )
+
+
+# ── TOTP Setup (Fix 5) ────────────────────────────────────────────────────────
+# These endpoints are exempt from the regular CSRF check because the setup flow
+# starts before a CSRF cookie is established. The setup token is a scoped JWT
+# that cannot be used on any other endpoint.
+
+
+class TOTPSetupResponse(BaseModel):
+    totp_uri: str
+    secret: str  # manual entry fallback
+
+
+class TOTPVerifyRequest(BaseModel):
+    code: str
+
+
+@router.post("/totp-setup", response_model=TOTPSetupResponse, tags=["Auth"])
+async def totp_setup(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_setup_user),
+):
+    """Generate a new TOTP secret and return the provisioning URI and raw secret."""
+    from crypto import encrypt as _encrypt
+    from totp import generate_secret, totp_uri
+
+    secret = generate_secret()
+    user.totp_secret = _encrypt(secret)
+    db.add(user)
+    await db.commit()
+    return TOTPSetupResponse(totp_uri=totp_uri(secret, user.username), secret=secret)
+
+
+@router.post("/totp-verify", tags=["Auth"])
+async def totp_verify(
+    body: TOTPVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_setup_user),
+):
+    """Verify the TOTP code and mark TOTP as enabled on the user account."""
+    from crypto import decrypt as _decrypt
+    from totp import verify_code as _verify_totp
+
+    if not user.totp_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="TOTP not set up — call /auth/totp-setup first",
+        )
+    secret = _decrypt(user.totp_secret)
+    if not _verify_totp(secret, body.code):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP code")
+
+    user.totp_enabled = True
+    db.add(user)
+    await db.commit()
+    return {"must_reauthenticate": True}

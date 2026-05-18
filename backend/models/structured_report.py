@@ -22,3 +22,6 @@ class StructuredReport(Base):
     # Increments on every doctor edit for audit trail
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    # Encrypted JSON map of PHI placeholders used during extraction (phi_filter.py).
+    # Required for re-identification if original values need to be restored.
+    phi_map: Mapped[str | None] = mapped_column(Text, nullable=True)

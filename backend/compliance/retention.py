@@ -38,6 +38,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from audit import create_audit_log
 from config import settings as app_settings
 from crypto import decrypt, encrypt
 from database import AsyncSessionLocal
@@ -195,10 +196,11 @@ async def _anonymize_document(doc_id, cutoff: datetime) -> None:
             select(ConsentRecord).where(ConsentRecord.document_id == doc_id)
         )
         for consent in consent_row.scalars().all():
-            consent.patient_name = _REDACTED
+            consent.patient_name = encrypt(_REDACTED)
 
         # Audit entry
-        db.add(AuditLog(
+        await create_audit_log(
+            db,
             user_id=None,
             username="system",
             role="system",
@@ -209,7 +211,7 @@ async def _anonymize_document(doc_id, cutoff: datetime) -> None:
                 "mode": "anonymize",
                 "cutoff": cutoff.date().isoformat(),
             },
-        ))
+        )
         await db.commit()
 
     logger.info("Retention: anonymized document %s", doc_id)
@@ -233,7 +235,8 @@ async def _delete_document(doc_id) -> None:
         minio_key = doc.minio_key
         doc.deleted_at = datetime.now(timezone.utc)
 
-        db.add(AuditLog(
+        await create_audit_log(
+            db,
             user_id=None,
             username="system",
             role="system",
@@ -241,7 +244,7 @@ async def _delete_document(doc_id) -> None:
             document_id=doc_id,
             ip_address="127.0.0.1",
             details={"mode": "delete"},
-        ))
+        )
         await db.commit()
 
     # MinIO deletion outside the DB transaction — a storage error must not

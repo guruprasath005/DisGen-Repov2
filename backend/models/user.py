@@ -16,6 +16,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_algo: Mapped[str] = mapped_column(String(20), nullable=False, server_default="bcrypt")
     role: Mapped[str] = mapped_column(UserRole, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -23,3 +24,5 @@ class User(Base):
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    totp_secret: Mapped[str | None] = mapped_column(String(500), nullable=True)  # stored encrypted
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

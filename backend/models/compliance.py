@@ -13,7 +13,8 @@ class ConsentRecord(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, index=True)
-    patient_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    # AES-256-GCM encrypted. Use safe_decrypt() on read — pre-hardening rows are plaintext.
+    patient_name: Mapped[str] = mapped_column(Text, nullable=False)
     consent_given: Mapped[bool] = mapped_column(Boolean, nullable=False)
     consent_method: Mapped[str] = mapped_column(ConsentMethod, nullable=False)
     consent_date: Mapped[date] = mapped_column(Date, nullable=False)
